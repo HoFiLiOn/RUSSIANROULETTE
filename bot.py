@@ -1,6 +1,8 @@
 import telebot
 import sqlite3
 import random
+import json
+import os
 from datetime import datetime, timedelta
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
@@ -9,6 +11,7 @@ BOT_TOKEN = "8412567351:AAG7eEMXlNfDBsNZF08GD-Pr-LH-2z1txSQ"
 BOT_USERNAME = "RussianRoulette_official_bot"
 BET_AMOUNTS = [10, 50, 100, 500]
 MAX_PLAYERS = 6
+ADMIN_ID = 7040677455
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
@@ -22,6 +25,13 @@ def init_db():
                   last_daily TEXT,
                   wins INTEGER DEFAULT 0,
                   losses INTEGER DEFAULT 0)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_settings
+                 (chat_id INTEGER PRIMARY KEY,
+                  min_bet INTEGER DEFAULT 10,
+                  max_bet INTEGER DEFAULT 500,
+                  game_enabled INTEGER DEFAULT 1,
+                  admin_only INTEGER DEFAULT 0)''')
     conn.commit()
     conn.close()
 
@@ -53,6 +63,32 @@ def update_user(user_id, bullets=None, wins=None, losses=None, last_daily=None):
     conn.commit()
     conn.close()
 
+def get_chat_settings(chat_id):
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    c.execute("SELECT min_bet, max_bet, game_enabled, admin_only FROM chat_settings WHERE chat_id = ?", (chat_id,))
+    settings = c.fetchone()
+    if not settings:
+        c.execute("INSERT INTO chat_settings (chat_id) VALUES (?)", (chat_id,))
+        conn.commit()
+        settings = (10, 500, 1, 0)
+    conn.close()
+    return {"min_bet": settings[0], "max_bet": settings[1], "game_enabled": settings[2], "admin_only": settings[3]}
+
+def update_chat_settings(chat_id, min_bet=None, max_bet=None, game_enabled=None, admin_only=None):
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    if min_bet is not None:
+        c.execute("UPDATE chat_settings SET min_bet = ? WHERE chat_id = ?", (min_bet, chat_id))
+    if max_bet is not None:
+        c.execute("UPDATE chat_settings SET max_bet = ? WHERE chat_id = ?", (max_bet, chat_id))
+    if game_enabled is not None:
+        c.execute("UPDATE chat_settings SET game_enabled = ? WHERE chat_id = ?", (game_enabled, chat_id))
+    if admin_only is not None:
+        c.execute("UPDATE chat_settings SET admin_only = ? WHERE chat_id = ?", (admin_only, chat_id))
+    conn.commit()
+    conn.close()
+
 def get_name(user_id):
     try:
         user = bot.get_chat(user_id)
@@ -60,16 +96,39 @@ def get_name(user_id):
     except:
         return str(user_id)
 
+def is_admin(user_id, chat_id):
+    if user_id == ADMIN_ID:
+        return True
+    try:
+        member = bot.get_chat_member(chat_id, user_id)
+        return member.status in ['creator', 'administrator']
+    except:
+        return False
+
 # ========== ХРАНИЛИЩЕ ИГР ==========
 games = {}
 
 # ========== КЛАВИАТУРЫ ==========
-def main_menu():
+def main_menu(chat_id):
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton("🎮 Создать игру", callback_data="create_game"))
     kb.add(InlineKeyboardButton("💰 Баланс", callback_data="balance"))
     kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
     kb.add(InlineKeyboardButton("📜 Правила", callback_data="rules"))
+    
+    if is_admin(chat_id, chat_id) or chat_id == ADMIN_ID:
+        kb.add(InlineKeyboardButton("⚙️ Админ панель", callback_data="admin_panel"))
+    
+    return kb
+
+def admin_panel_kb(chat_id):
+    settings = get_chat_settings(chat_id)
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(f"💰 Мин. ставка: {settings['min_bet']}", callback_data="admin_min_bet"))
+    kb.add(InlineKeyboardButton(f"💎 Макс. ставка: {settings['max_bet']}", callback_data="admin_max_bet"))
+    kb.add(InlineKeyboardButton(f"🎮 Игры: {'✅ Вкл' if settings['game_enabled'] else '❌ Выкл'}", callback_data="admin_toggle_game"))
+    kb.add(InlineKeyboardButton(f"👑 Только админы: {'✅ Да' if settings['admin_only'] else '❌ Нет'}", callback_data="admin_toggle_admin_only"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
 def game_lobby_kb(chat_id, creator, all_bets_placed=False):
@@ -77,24 +136,26 @@ def game_lobby_kb(chat_id, creator, all_bets_placed=False):
     kb.add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{chat_id}"))
     if creator and all_bets_placed:
         kb.add(InlineKeyboardButton("🚀 Начать игру", callback_data=f"start_game_{chat_id}"))
-    kb.add(InlineKeyboardButton("❌ Отменить", callback_data="back"))
+    kb.add(InlineKeyboardButton("❌ Отменить", callback_data="cancel_game"))
     return kb
 
-def action_menu(user_id, bet):
+def game_action_kb(chat_id, user_id, bet):
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("🔫 Выстрелить", callback_data=f"shoot_{user_id}_{bet}"))
-    kb.add(InlineKeyboardButton("🔄 Крутить барабан", callback_data=f"spin_{user_id}_{bet}"))
+    kb.add(InlineKeyboardButton("🔫 Выстрелить", callback_data=f"shoot_{chat_id}_{user_id}_{bet}"))
+    kb.add(InlineKeyboardButton("🔄 Крутить барабан", callback_data=f"spin_{chat_id}_{user_id}_{bet}"))
+    return kb
+
+def bet_kb(chat_id):
+    settings = get_chat_settings(chat_id)
+    kb = InlineKeyboardMarkup(row_width=1)
+    for bet in BET_AMOUNTS:
+        if settings['min_bet'] <= bet <= settings['max_bet']:
+            kb.add(InlineKeyboardButton(f"{bet} 💎", callback_data=f"place_bet_{chat_id}_{bet}"))
     return kb
 
 def back_button():
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🔙 Назад в меню", callback_data="back"))
-    return kb
-
-def bet_kb(game_chat_id):
-    kb = InlineKeyboardMarkup(row_width=1)
-    for bet in BET_AMOUNTS:
-        kb.add(InlineKeyboardButton(f"{bet} 💎", callback_data=f"place_bet_{game_chat_id}_{bet}"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
 # ========== ОПИСАНИЕ ==========
@@ -120,7 +181,6 @@ def get_rules():
     )
 
 def update_lobby_message(chat_id):
-    """Обновляет сообщение лобби"""
     game = games.get(chat_id)
     if not game:
         return
@@ -156,7 +216,38 @@ def update_lobby_message(chat_id):
             text,
             chat_id,
             game["message_id"],
-            reply_markup=game_lobby_kb(chat_id, True, all_bets_placed)
+            reply_markup=game_lobby_kb(chat_id, game["creator"] == game["creator"], all_bets_placed)
+        )
+    except:
+        pass
+
+def update_game_message(chat_id):
+    game = games.get(chat_id)
+    if not game or game["status"] != "playing":
+        return
+    
+    players_list = []
+    for p in game["players"]:
+        status = "🔫 в игре"
+        if p == game["current_player"]:
+            status = "🎯 ХОДИТ"
+        players_list.append(f"• {get_name(p)} — {status}")
+    
+    players_text = "\n".join(players_list)
+    total_pot = sum(game["bets"].values())
+    
+    text = (
+        f"🎲 <b>ИГРА ИДЕТ!</b>\n\n"
+        f"Участники:\n{players_text}\n\n"
+        f"💰 Общий банк: {total_pot} 💎\n"
+        f"🔫 Ход: {get_name(game['current_player'])}"
+    )
+    
+    try:
+        bot.edit_message_text(
+            text,
+            chat_id,
+            game["message_id"]
         )
     except:
         pass
@@ -167,34 +258,18 @@ def start_command(message):
     init_db()
     get_user(message.from_user.id)
     
-    # Если команда в группе — показываем меню
-    if message.chat.type != "private":
-        bot.send_message(
-            message.chat.id,
-            f"<b>🔫 Русская Рулетка</b>\n\n{get_rules()}",
-            reply_markup=main_menu()
-        )
-    else:
-        # В личке — показываем меню с кнопкой добавить в чат
-        kb = InlineKeyboardMarkup(row_width=1)
-        kb.add(InlineKeyboardButton("➕ Добавить бота в чат", url=f"https://t.me/{BOT_USERNAME}?startgroup=start"))
-        kb.add(InlineKeyboardButton("💰 Баланс", callback_data="balance"))
-        kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
-        kb.add(InlineKeyboardButton("📜 Правила", callback_data="rules"))
-        
-        bot.send_message(
-            message.chat.id,
-            f"<b>🔫 Добро пожаловать в Русскую Рулетку, {message.from_user.first_name}!</b>\n\n"
-            f"Чтобы играть с друзьями, добавь меня в групповой чат!\n\n{get_rules()}",
-            reply_markup=kb
-        )
+    bot.send_message(
+        message.chat.id,
+        f"<b>🔫 Добро пожаловать в Русскую Рулетку, {message.from_user.first_name}!</b>\n\n{get_rules()}",
+        reply_markup=main_menu(message.chat.id)
+    )
 
 @bot.message_handler(commands=['rules'])
 def rules_command(message):
     bot.send_message(
         message.chat.id,
         get_rules(),
-        reply_markup=main_menu()
+        reply_markup=main_menu(message.chat.id)
     )
 
 @bot.message_handler(commands=['balance'])
@@ -232,29 +307,67 @@ def handle_callback(call):
     
     # Назад
     if call.data == "back":
-        if chat_id != user_id:
-            # В группе
-            bot.edit_message_text(
-                f"<b>🔫 Русская Рулетка</b>\n\n{get_rules()}",
-                chat_id,
-                message_id,
-                reply_markup=main_menu()
-            )
-        else:
-            # В личке
-            kb = InlineKeyboardMarkup(row_width=1)
-            kb.add(InlineKeyboardButton("➕ Добавить бота в чат", url=f"https://t.me/{BOT_USERNAME}?startgroup=start"))
-            kb.add(InlineKeyboardButton("💰 Баланс", callback_data="balance"))
-            kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
-            kb.add(InlineKeyboardButton("📜 Правила", callback_data="rules"))
-            
-            bot.edit_message_text(
-                f"<b>🔫 Главное меню</b>\n\n{get_rules()}",
-                chat_id,
-                message_id,
-                reply_markup=kb
-            )
+        bot.edit_message_text(
+            f"<b>🔫 Главное меню</b>\n\n{get_rules()}",
+            chat_id,
+            message_id,
+            reply_markup=main_menu(chat_id)
+        )
         bot.answer_callback_query(call.id)
+        return
+    
+    # Админ панель
+    if call.data == "admin_panel":
+        if not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы чата!", show_alert=True)
+            return
+        
+        bot.edit_message_text(
+            f"<b>⚙️ АДМИН ПАНЕЛЬ</b>\n\nНастройки чата:",
+            chat_id,
+            message_id,
+            reply_markup=admin_panel_kb(chat_id)
+        )
+        bot.answer_callback_query(call.id)
+        return
+    
+    # Админ настройки
+    if call.data == "admin_min_bet":
+        if not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы!", show_alert=True)
+            return
+        bot.send_message(user_id, "Введите новую минимальную ставку (от 1 до 500):")
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_max_bet":
+        if not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы!", show_alert=True)
+            return
+        bot.send_message(user_id, "Введите новую максимальную ставку (от 10 до 1000):")
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_toggle_game":
+        if not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы!", show_alert=True)
+            return
+        settings = get_chat_settings(chat_id)
+        new_state = 0 if settings['game_enabled'] else 1
+        update_chat_settings(chat_id, game_enabled=new_state)
+        bot.answer_callback_query(call.id, f"Игры {'включены' if new_state else 'выключены'}")
+        bot.edit_message_reply_markup(chat_id, message_id, reply_markup=admin_panel_kb(chat_id))
+        return
+    
+    if call.data == "admin_toggle_admin_only":
+        if not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы!", show_alert=True)
+            return
+        settings = get_chat_settings(chat_id)
+        new_state = 0 if settings['admin_only'] else 1
+        update_chat_settings(chat_id, admin_only=new_state)
+        bot.answer_callback_query(call.id, f"Игры {'только для админов' if new_state else 'для всех'}")
+        bot.edit_message_reply_markup(chat_id, message_id, reply_markup=admin_panel_kb(chat_id))
         return
     
     # Правила
@@ -303,19 +416,38 @@ def handle_callback(call):
         bot.answer_callback_query(call.id)
         return
     
-    # СОЗДАТЬ ИГРУ — только в группе
+    # Отменить игру
+    if call.data == "cancel_game":
+        if chat_id in games:
+            if games[chat_id]["creator"] == user_id or is_admin(user_id, chat_id):
+                del games[chat_id]
+                bot.edit_message_text(
+                    "❌ Игра отменена",
+                    chat_id,
+                    message_id,
+                    reply_markup=main_menu(chat_id)
+                )
+                bot.answer_callback_query(call.id, "Игра отменена")
+            else:
+                bot.answer_callback_query(call.id, "Только создатель может отменить игру", show_alert=True)
+        return
+    
+    # СОЗДАТЬ ИГРУ
     if call.data == "create_game":
-        # Проверяем, что это групповой чат
-        if chat_id == user_id:
-            bot.answer_callback_query(call.id, "❌ Чтобы создать игру, добавь меня в групповой чат!", show_alert=True)
+        settings = get_chat_settings(chat_id)
+        
+        if not settings['game_enabled']:
+            bot.answer_callback_query(call.id, "❌ Игры отключены админом чата!", show_alert=True)
             return
         
-        # Проверяем, есть ли уже игра в этом чате
+        if settings['admin_only'] and not is_admin(user_id, chat_id):
+            bot.answer_callback_query(call.id, "❌ Только админы могут создавать игры!", show_alert=True)
+            return
+        
         if chat_id in games and games[chat_id]["status"] in ["waiting", "playing"]:
             bot.answer_callback_query(call.id, "В этом чате уже есть активная игра!", show_alert=True)
             return
         
-        # Создаем новую игру и отправляем сообщение в чат
         sent_msg = bot.send_message(
             chat_id,
             f"🎮 <b>Создается лобби...</b>"
@@ -343,7 +475,6 @@ def handle_callback(call):
             reply_markup=game_lobby_kb(chat_id, True, False)
         )
         
-        # Отправляем создателю в ЛС предложение сделать ставку
         bot.send_message(
             user_id,
             f"🎮 Ты создал игру в чате!\n\n"
@@ -371,11 +502,8 @@ def handle_callback(call):
             return
         
         games[game_chat_id]["players"].append(user_id)
-        
-        # Обновляем сообщение в чате
         update_lobby_message(game_chat_id)
         
-        # Отправляем в ЛС предложение сделать ставку
         bot.send_message(
             user_id,
             f"🎮 Ты присоединился к игре в чате!\n\n"
@@ -414,9 +542,7 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, f"Не хватает 💎! Нужно {bet}", show_alert=True)
             return
         
-        # Сохраняем ставку
         games[game_chat_id]["bets"][user_id] = bet
-        # Списываем сразу
         update_user(user_id, bullets=user["bullets"] - bet)
         
         bot.send_message(
@@ -425,8 +551,6 @@ def handle_callback(call):
         )
         
         bot.answer_callback_query(call.id, f"Ставка {bet} 💎 принята!")
-        
-        # Обновляем сообщение лобби
         update_lobby_message(game_chat_id)
         return
     
@@ -448,20 +572,17 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, "Нужно минимум 2 игрока!", show_alert=True)
             return
         
-        # Проверяем ставки
         for p in game["players"]:
             if p not in game["bets"]:
                 bot.answer_callback_query(call.id, "Не все игроки сделали ставки!", show_alert=True)
                 return
         
-        # Инициализируем игру
         game["status"] = "playing"
         players_list = game["players"].copy()
         random.shuffle(players_list)
         game["players"] = players_list
         game["current_player"] = players_list[0]
         
-        # Создаем барабаны
         for p in players_list:
             game["chambers"][p] = random.randint(1, 6)
         
@@ -472,23 +593,11 @@ def handle_callback(call):
         bot.edit_message_text(
             f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\n"
             f"Участники:\n{players_names}\n\n"
-            f"Общий банк: {total_pot} 💎\n\n"
-            f"Первый ход: {get_name(game['current_player'])}\n\n"
-            f"Игроки, проверьте личные сообщения!",
+            f"💰 Общий банк: {total_pot} 💎\n"
+            f"🔫 Первый ход: {get_name(game['current_player'])}",
             game_chat_id,
-            game["message_id"]
-        )
-        
-        # Отправляем ход первому игроку в ЛС
-        current = game["current_player"]
-        bet = game["bets"][current]
-        
-        bot.send_message(
-            current,
-            f"🔫 <b>ТВОЙ ХОД!</b>\n\n"
-            f"Ставка: {bet} 💎\n\n"
-            f"Выбери действие:",
-            reply_markup=action_menu(current, bet)
+            game["message_id"],
+            reply_markup=game_action_kb(game_chat_id, game["current_player"], game["bets"][game["current_player"]])
         )
         
         bot.answer_callback_query(call.id, "Игра начата!")
@@ -497,31 +606,29 @@ def handle_callback(call):
     # КРУТИТЬ БАРАБАН
     if call.data.startswith("spin_"):
         parts = call.data.split("_")
-        player_id = int(parts[1])
-        bet = int(parts[2])
+        game_chat_id = int(parts[1])
+        player_id = int(parts[2])
+        bet = int(parts[3])
         
-        # Находим игру
-        game = None
-        game_chat_id = None
-        for gid, g in games.items():
-            if g["status"] == "playing" and g["current_player"] == player_id and player_id in g["players"]:
-                game = g
-                game_chat_id = gid
-                break
-        
-        if not game:
-            bot.answer_callback_query(call.id, "Не твой ход или игра завершена!", show_alert=True)
+        if game_chat_id not in games or games[game_chat_id]["status"] != "playing":
+            bot.answer_callback_query(call.id, "Игра не активна!", show_alert=True)
             return
         
-        # Крутим барабан
+        game = games[game_chat_id]
+        
+        if game["current_player"] != player_id:
+            bot.answer_callback_query(call.id, "Сейчас не твой ход!", show_alert=True)
+            return
+        
         game["chambers"][player_id] = random.randint(1, 6)
         
-        bot.send_message(
-            player_id,
+        bot.edit_message_text(
             f"🔄 Барабан прокручен!\n\n"
-            f"Ставка: {bet} 💎\n\n"
+            f"Ставка: {bet} 💎\n"
             f"Готов выстрелить?",
-            reply_markup=action_menu(player_id, bet)
+            game_chat_id,
+            game["message_id"],
+            reply_markup=game_action_kb(game_chat_id, player_id, bet)
         )
         
         bot.answer_callback_query(call.id, "Барабан прокручен!")
@@ -530,43 +637,27 @@ def handle_callback(call):
     # ВЫСТРЕЛИТЬ
     if call.data.startswith("shoot_"):
         parts = call.data.split("_")
-        player_id = int(parts[1])
-        bet = int(parts[2])
+        game_chat_id = int(parts[1])
+        player_id = int(parts[2])
+        bet = int(parts[3])
         
-        # Находим игру
-        game = None
-        game_chat_id = None
-        for gid, g in games.items():
-            if g["status"] == "playing" and g["current_player"] == player_id and player_id in g["players"]:
-                game = g
-                game_chat_id = gid
-                break
+        if game_chat_id not in games or games[game_chat_id]["status"] != "playing":
+            bot.answer_callback_query(call.id, "Игра не активна!", show_alert=True)
+            return
         
-        if not game:
-            bot.answer_callback_query(call.id, "Не твой ход или игра завершена!", show_alert=True)
+        game = games[game_chat_id]
+        
+        if game["current_player"] != player_id:
+            bot.answer_callback_query(call.id, "Сейчас не твой ход!", show_alert=True)
             return
         
         chamber = game["chambers"][player_id]
         trigger = random.randint(1, 6)
         
         if trigger == chamber:
-            # ПРОИГРЫШ - выбывает
             game["players"].remove(player_id)
             update_user(player_id, losses=get_user(player_id)["losses"] + 1)
             
-            bot.send_message(
-                player_id,
-                f"💀 <b>БАХ!</b>\n\n"
-                f"Выпал патрон. Ты выбываешь из игры!\n"
-                f"Потеряно: {bet} 💎"
-            )
-            
-            bot.send_message(
-                game_chat_id,
-                f"💀 <b>{get_name(player_id)} выбыл!</b>\nОсталось игроков: {len(game['players'])}"
-            )
-            
-            # Проверяем победителя
             if len(game["players"]) == 1:
                 winner_id = game["players"][0]
                 total_pot = sum(game["bets"].values())
@@ -574,78 +665,82 @@ def handle_callback(call):
                 user = get_user(winner_id)
                 update_user(winner_id, bullets=user["bullets"] + total_pot, wins=user["wins"] + 1)
                 
-                bot.send_message(
-                    winner_id,
-                    f"🏆 <b>ТЫ ПОБЕДИЛ!</b>\n\n"
-                    f"Ты выиграл {total_pot} 💎!"
-                )
-                
-                bot.send_message(
+                bot.edit_message_text(
+                    f"💀 <b>{get_name(player_id)} ВЫБЫЛ!</b>\n\n"
+                    f"🏆 <b>ПОБЕДИТЕЛЬ: {get_name(winner_id)}</b>\n"
+                    f"💰 Выигрыш: {total_pot} 💎",
                     game_chat_id,
-                    f"🏆 <b>ИГРА ОКОНЧЕНА!</b>\n\n"
-                    f"Победитель: {get_name(winner_id)}\n"
-                    f"Выигрыш: {total_pot} 💎!"
+                    game["message_id"],
+                    reply_markup=main_menu(game_chat_id)
                 )
                 
+                bot.send_message(winner_id, f"🏆 Ты победил! Выигрыш: {total_pot} 💎")
                 del games[game_chat_id]
                 bot.answer_callback_query(call.id, "Ты выбыл!")
                 return
             
-            # Следующий ход
             game["current_player"] = game["players"][0]
             current = game["current_player"]
             current_bet = game["bets"][current]
             
-            bot.send_message(
-                current,
-                f"🔫 <b>ТВОЙ ХОД!</b>\n\n"
-                f"Ставка: {current_bet} 💎\n\n"
-                f"Выбери действие:",
-                reply_markup=action_menu(current, current_bet)
-            )
+            players_list = "\n".join([f"• {get_name(p)}" for p in game["players"]])
+            total_pot = sum(game["bets"].values())
             
-            bot.send_message(
+            bot.edit_message_text(
+                f"💀 <b>{get_name(player_id)} ВЫБЫЛ!</b>\n\n"
+                f"Остались:\n{players_list}\n\n"
+                f"💰 Банк: {total_pot} 💎\n"
+                f"🔫 Ход: {get_name(current)}",
                 game_chat_id,
-                f"🔫 Следующий ход: {get_name(current)}"
+                game["message_id"],
+                reply_markup=game_action_kb(game_chat_id, current, current_bet)
             )
             
             bot.answer_callback_query(call.id, "Ты выбыл!")
             
         else:
-            # ПРОДОЛЖАЕТ
-            bot.send_message(
-                player_id,
-                f"🍀 <b>ЩЕЛЧОК...</b>\n\n"
-                f"Пусто! Ты продолжаешь игру."
-            )
-            
-            # Следующий ход
             current_index = game["players"].index(player_id)
             next_index = (current_index + 1) % len(game["players"])
             game["current_player"] = game["players"][next_index]
             current = game["current_player"]
             current_bet = game["bets"][current]
             
-            bot.send_message(
-                current,
-                f"🔫 <b>ТВОЙ ХОД!</b>\n\n"
-                f"Ставка: {current_bet} 💎\n\n"
-                f"Выбери действие:",
-                reply_markup=action_menu(current, current_bet)
-            )
+            total_pot = sum(game["bets"].values())
             
-            bot.send_message(
+            bot.edit_message_text(
+                f"🍀 <b>{get_name(player_id)} ВЫЖИЛ!</b>\n\n"
+                f"💰 Банк: {total_pot} 💎\n"
+                f"🔫 Ход: {get_name(current)}",
                 game_chat_id,
-                f"🍀 {get_name(player_id)} выжил!\n🔫 Следующий ход: {get_name(current)}"
+                game["message_id"],
+                reply_markup=game_action_kb(game_chat_id, current, current_bet)
             )
             
             bot.answer_callback_query(call.id, "Пусто! Ты выжил.")
         
         return
 
+# ========== ОБРАБОТКА СООБЩЕНИЙ ДЛЯ НАСТРОЕК ==========
+@bot.message_handler(func=lambda message: True)
+def handle_admin_input(message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    
+    # Проверяем, что это админ и сообщение в ЛС
+    if message.chat.type != "private":
+        return
+    
+    # Настройка минимальной ставки
+    if message.text.isdigit() and int(message.text) > 0:
+        # Ищем последнюю админ команду
+        settings = get_chat_settings(chat_id)
+        # Временное решение: ждем что админ вводит числа
+        pass
+
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     init_db()
     print("Бот запущен!")
     print(f"Username: @{BOT_USERNAME}")
+    print(f"Admin ID: {ADMIN_ID}")
     bot.infinity_polling()
