@@ -9,7 +9,7 @@ BOT_TOKEN = "8412567351:AAG7eEMXlNfDBsNZF08GD-Pr-LH-2z1txSQ"
 STARS_TO_BULLETS = 100
 BET_AMOUNTS = [10, 50, 100, 500]
 
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # ========== БД ==========
 def init_db():
@@ -75,70 +75,88 @@ def game_menu(bet):
     kb.add(InlineKeyboardButton("🏠 Выход", callback_data="back"))
     return kb
 
+def back_button():
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔙 Назад в меню", callback_data="back"))
+    return kb
+
+# ========== ОПИСАНИЕ ==========
+def get_description():
+    return (
+        "<b>🔫 РУССКАЯ РУЛЕТКА 🔫</b>\n\n"
+        "<b>🎲 Правила игры:</b>\n"
+        "• Делаешь ставку в 💎 (патронах)\n"
+        "• Нажимаешь выстрел\n"
+        "• Если выпадает пусто → выигрываешь x2\n"
+        "• Если выпадает патрон → проигрываешь ставку\n"
+        "• Можно крутить барабан перед выстрелом\n\n"
+        "<b>💰 Как получить 💎:</b>\n"
+        "• Ежедневный бонус — 50 💎\n"
+        "• Победы в игре — x2 от ставки\n"
+        "• Покупка за Stars — 1⭐ = 100 💎\n\n"
+        "<b>⭐ Покупка за Stars:</b>\n"
+        "Нажми кнопку 'Купить 💎' и выбери сумму\n\n"
+        "<b>📌 Команды:</b>\n"
+        "/play — начать игру\n"
+        "/balance — показать баланс\n"
+        "/daily — забрать бонус\n"
+        "/buy — купить 💎\n"
+        "/help — это сообщение\n\n"
+        "🎮 <i>Играть можно прямо в этом чате!</i>"
+    )
+
 # ========== ХРАНИЛИЩЕ ИГР ==========
 games = {}
 
 # ========== КОМАНДЫ ==========
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'help'])
 def start_command(message):
     init_db()
-    get_user(message.chat.id)
+    get_user(message.from_user.id)
     bot.send_message(
         message.chat.id,
-        f"🔫 Добро пожаловать в Русскую Рулетку, {message.from_user.first_name}!\n\n"
-        f"Правила:\n"
-        f"• Ставишь 💎, стреляешь\n"
-        f"• Если пусто → выигрываешь x2\n"
-        f"• Если патрон → проигрываешь ставку\n\n"
-        f"У тебя уже есть 100 💎 на первый запуск!\n"
-        f"Каждый день забирай бонус и покупай 💎 за Stars.\n\n"
-        f"Команды:\n"
-        f"/play - начать игру\n"
-        f"/balance - баланс\n"
-        f"/daily - бонус\n"
-        f"/buy - купить 💎 за Stars",
+        get_description(),
         reply_markup=main_menu()
     )
 
 @bot.message_handler(commands=['play'])
 def play_command(message):
-    user = get_user(message.chat.id)
+    user_id = message.from_user.id
+    user = get_user(user_id)
     if user["bullets"] < min(BET_AMOUNTS):
-        bot.answer_callback_query(message.chat.id, f"❌ Не хватает 💎! Нужно минимум {min(BET_AMOUNTS)}")
+        bot.reply_to(message, f"❌ Не хватает 💎! Нужно минимум {min(BET_AMOUNTS)}")
         return
     bot.send_message(
         message.chat.id,
-        f"💰 Твой баланс: {user['bullets']} 💎\n\nВыбери ставку:",
+        f"💰 <b>{message.from_user.first_name}</b>, твой баланс: {user['bullets']} 💎\n\nВыбери ставку:",
         reply_markup=bet_menu()
     )
 
 @bot.message_handler(commands=['balance'])
 def balance_command(message):
-    user = get_user(message.chat.id)
-    bot.send_message(
-        message.chat.id,
-        f"💰 *Твой баланс:* {user['bullets']} 💎\n"
-        f"🏆 Побед: {user['wins']} | 💀 Поражений: {user['losses']}",
-        parse_mode="Markdown"
+    user_id = message.from_user.id
+    user = get_user(user_id)
+    bot.reply_to(
+        message,
+        f"💰 <b>Баланс:</b> {user['bullets']} 💎\n"
+        f"🏆 Побед: {user['wins']} | 💀 Поражений: {user['losses']}"
     )
 
 @bot.message_handler(commands=['daily'])
 def daily_command(message):
-    user = get_user(message.chat.id)
+    user_id = message.from_user.id
+    user = get_user(user_id)
     last = datetime.fromisoformat(user["last_daily"]) if user["last_daily"] else datetime.min
     now = datetime.now()
     
     if now - last < timedelta(days=1):
         hours_left = 24 - (now - last).seconds // 3600
-        bot.send_message(message.chat.id, f"⏰ Бонус будет через {hours_left} ч")
+        bot.reply_to(message, f"⏰ Бонус будет через {hours_left} ч")
         return
     
     new_bullets = user["bullets"] + 50
-    update_user(message.chat.id, bullets=new_bullets, last_daily=now.isoformat())
-    bot.send_message(
-        message.chat.id,
-        f"🎁 Ты получил 50 💎!\n\n💰 Новый баланс: {new_bullets} 💎"
-    )
+    update_user(user_id, bullets=new_bullets, last_daily=now.isoformat())
+    bot.reply_to(message, f"🎁 Ты получил 50 💎!\n\n💰 Новый баланс: {new_bullets} 💎")
 
 @bot.message_handler(commands=['buy'])
 def buy_command(message):
@@ -149,8 +167,7 @@ def buy_command(message):
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     bot.send_message(
         message.chat.id,
-        "⭐ *Покупка 💎 за Telegram Stars*\n\n1 Star = 100 💎\n\nВыбери количество:",
-        parse_mode="Markdown",
+        "<b>⭐ Покупка 💎 за Telegram Stars</b>\n\n1 Star = 100 💎\n\nВыбери количество:",
         reply_markup=kb
     )
 
@@ -158,13 +175,15 @@ def buy_command(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     user_id = call.from_user.id
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
     
-    # Назад
+    # Назад в меню
     if call.data == "back":
         bot.edit_message_text(
-            "🔫 Главное меню:",
-            call.message.chat.id,
-            call.message.message_id,
+            get_description(),
+            chat_id,
+            message_id,
             reply_markup=main_menu()
         )
         bot.answer_callback_query(call.id)
@@ -174,12 +193,11 @@ def handle_callback(call):
     if call.data == "balance":
         user = get_user(user_id)
         bot.edit_message_text(
-            f"💰 *Твой баланс:* {user['bullets']} 💎\n"
+            f"💰 <b>Твой баланс:</b> {user['bullets']} 💎\n"
             f"🏆 Побед: {user['wins']} | 💀 Поражений: {user['losses']}",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
+            chat_id,
+            message_id,
+            reply_markup=back_button()
         )
         bot.answer_callback_query(call.id)
         return
@@ -199,9 +217,9 @@ def handle_callback(call):
         update_user(user_id, bullets=new_bullets, last_daily=now.isoformat())
         bot.edit_message_text(
             f"🎁 Ты получил 50 💎!\n\n💰 Новый баланс: {new_bullets} 💎",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 В меню", callback_data="back"))
+            chat_id,
+            message_id,
+            reply_markup=back_button()
         )
         bot.answer_callback_query(call.id)
         return
@@ -213,9 +231,9 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, f"❌ Не хватает 💎! Нужно минимум {min(BET_AMOUNTS)}", show_alert=True)
             return
         bot.edit_message_text(
-            f"💰 Твой баланс: {user['bullets']} 💎\n\nВыбери ставку:",
-            call.message.chat.id,
-            call.message.message_id,
+            f"💰 <b>{call.from_user.first_name}</b>, твой баланс: {user['bullets']} 💎\n\nВыбери ставку:",
+            chat_id,
+            message_id,
             reply_markup=bet_menu()
         )
         bot.answer_callback_query(call.id)
@@ -230,19 +248,17 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, f"❌ Не хватает 💎! Нужно {bet}", show_alert=True)
             return
         
-        # Сохраняем игру
         games[user_id] = {
             "bet": bet,
             "chamber": random.randint(1, 6)
         }
         
         bot.edit_message_text(
-            f"🎲 Ставка: *{bet} 💎*\n"
+            f"🎲 Ставка: <b>{bet} 💎</b>\n"
             f"Барабан заряжен.\n\n"
             f"Что делаешь?",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode="Markdown",
+            chat_id,
+            message_id,
             reply_markup=game_menu(bet)
         )
         bot.answer_callback_query(call.id)
@@ -258,8 +274,8 @@ def handle_callback(call):
             f"🔄 Барабан прокручен...\n"
             f"Ставка: {bet} 💎\n\n"
             f"Готов стрелять?",
-            call.message.chat.id,
-            call.message.message_id,
+            chat_id,
+            message_id,
             reply_markup=game_menu(bet)
         )
         bot.answer_callback_query(call.id, "Барабан прокручен")
@@ -274,7 +290,6 @@ def handle_callback(call):
         trigger = random.randint(1, 6)
         
         if trigger == chamber:
-            # Проигрыш
             new_bullets = user["bullets"] - bet
             update_user(user_id, bullets=new_bullets, losses=user["losses"] + 1)
             
@@ -283,16 +298,14 @@ def handle_callback(call):
                    InlineKeyboardButton("🏠 В меню", callback_data="back"))
             
             bot.edit_message_text(
-                f"💀 *БАХ!*\n\n"
-                f"Выпал патрон. Ты проиграл *{bet} 💎*\n"
+                f"💀 <b>БАХ!</b>\n\n"
+                f"Выпал патрон. Ты проиграл <b>{bet} 💎</b>\n"
                 f"💰 Новый баланс: {new_bullets} 💎",
-                call.message.chat.id,
-                call.message.message_id,
-                parse_mode="Markdown",
+                chat_id,
+                message_id,
                 reply_markup=kb
             )
         else:
-            # Выигрыш
             win = bet * 2
             new_bullets = user["bullets"] + win
             update_user(user_id, bullets=new_bullets, wins=user["wins"] + 1)
@@ -302,16 +315,14 @@ def handle_callback(call):
                    InlineKeyboardButton("🏠 В меню", callback_data="back"))
             
             bot.edit_message_text(
-                f"🍀 *ЩЕЛЧОК...*\n\n"
-                f"Пусто! Ты выиграл *{win} 💎*\n"
+                f"🍀 <b>ЩЕЛЧОК...</b>\n\n"
+                f"Пусто! Ты выиграл <b>{win} 💎</b>\n"
                 f"💰 Новый баланс: {new_bullets} 💎",
-                call.message.chat.id,
-                call.message.message_id,
-                parse_mode="Markdown",
+                chat_id,
+                message_id,
                 reply_markup=kb
             )
         
-        # Удаляем игру
         if user_id in games:
             del games[user_id]
         
@@ -326,10 +337,9 @@ def handle_callback(call):
         kb.add(InlineKeyboardButton("100 Stars → 10000 💎", callback_data="buy_100"))
         kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
         bot.edit_message_text(
-            "⭐ *Покупка 💎 за Telegram Stars*\n\n1 Star = 100 💎\n\nВыбери количество:",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode="Markdown",
+            "<b>⭐ Покупка 💎 за Telegram Stars</b>\n\n1 Star = 100 💎\n\nВыбери количество:",
+            chat_id,
+            message_id,
             reply_markup=kb
         )
         bot.answer_callback_query(call.id)
@@ -343,7 +353,7 @@ def handle_callback(call):
         prices = [LabeledPrice(label=f"{bullets} 💎", amount=stars)]
         
         bot.send_invoice(
-            call.message.chat.id,
+            chat_id,
             title="Покупка 💎",
             description=f"{bullets} патронов для русской рулетки",
             payload=f"bullets_{bullets}",
@@ -365,16 +375,15 @@ def handle_successful_payment(message):
     payload = message.successful_payment.invoice_payload
     bullets = int(payload.split("_")[1])
     
-    user = get_user(message.chat.id)
+    user = get_user(message.from_user.id)
     new_bullets = user["bullets"] + bullets
-    update_user(message.chat.id, bullets=new_bullets)
+    update_user(message.from_user.id, bullets=new_bullets)
     
     bot.send_message(
         message.chat.id,
         f"✅ Оплата прошла успешно!\n\n"
-        f"Ты получил *{bullets} 💎*\n"
+        f"Ты получил <b>{bullets} 💎</b>\n"
         f"💰 Новый баланс: {new_bullets} 💎",
-        parse_mode="Markdown",
         reply_markup=main_menu()
     )
 
