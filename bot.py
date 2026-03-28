@@ -189,6 +189,17 @@ def get_name(user_id):
     except:
         return str(user_id)
 
+def get_user_link(user_id):
+    try:
+        user = bot.get_chat(user_id)
+        name = user.first_name
+        if user.username:
+            return f"@{user.username}"
+        else:
+            return f'<a href="tg://user?id={user_id}">{name}</a>'
+    except:
+        return str(user_id)
+
 def is_chat_owner(user_id, chat_id):
     try:
         member = bot.get_chat_member(chat_id, user_id)
@@ -320,9 +331,9 @@ def update_lobby_message(chat_id):
     players_list = []
     for p in game["players"]:
         if p in game["bets"]:
-            players_list.append(f"• {get_name(p)} — {game['bets'][p]} 💎")
+            players_list.append(f"• {get_user_link(p)} — {game['bets'][p]} 💎")
         else:
-            players_list.append(f"• {get_name(p)} — ожидает ставку")
+            players_list.append(f"• {get_user_link(p)} — ожидает ставку")
     
     players_text = "\n".join(players_list)
     total_pot = sum(game["bets"].values()) if game["bets"] else 0
@@ -335,7 +346,7 @@ def update_lobby_message(chat_id):
     
     text = (
         f"🎮 <b>ЛОББИ ИГРЫ</b>\n\n"
-        f"Создатель: {get_name(game['creator'])}\n"
+        f"Создатель: {get_user_link(game['creator'])}\n"
         f"Участники ({players_count}/{game['max_players']}):\n{players_text}"
         f"{status_text}"
     )
@@ -345,7 +356,8 @@ def update_lobby_message(chat_id):
             text,
             chat_id,
             game["message_id"],
-            reply_markup=game_lobby_kb(chat_id, game["creator"] == game["creator"], all_bets_placed)
+            reply_markup=game_lobby_kb(chat_id, game["creator"] == game["creator"], all_bets_placed),
+            parse_mode="HTML"
         )
     except:
         pass
@@ -523,8 +535,8 @@ def handle_callback(call):
         top = get_top_players("wins", 10)
         text = "<b>🏆 ТОП ПО ПОБЕДАМ</b>\n\n"
         for i, (uid, wins, bullets) in enumerate(top, 1):
-            text += f"{i}. {get_name(uid)} — {wins} побед, {bullets} 💎\n"
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button())
+            text += f"{i}. {get_user_link(uid)} — {wins} побед, {bullets} 💎\n"
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button(), parse_mode="HTML")
         bot.answer_callback_query(call.id)
         return
     
@@ -533,8 +545,8 @@ def handle_callback(call):
         top = get_top_players("bullets", 10)
         text = "<b>💰 ТОП ПО БАЛАНСУ</b>\n\n"
         for i, (uid, bullets, wins) in enumerate(top, 1):
-            text += f"{i}. {get_name(uid)} — {bullets} 💎, {wins} побед\n"
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button())
+            text += f"{i}. {get_user_link(uid)} — {bullets} 💎, {wins} побед\n"
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button(), parse_mode="HTML")
         bot.answer_callback_query(call.id)
         return
     
@@ -543,8 +555,8 @@ def handle_callback(call):
         top = get_top_players("games", 10)
         text = "<b>🎮 ТОП ПО ИГРАМ</b>\n\n"
         for i, (uid, games_count, wins) in enumerate(top, 1):
-            text += f"{i}. {get_name(uid)} — {games_count} игр, {wins} побед\n"
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button())
+            text += f"{i}. {get_user_link(uid)} — {games_count} игр, {wins} побед\n"
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button(), parse_mode="HTML")
         bot.answer_callback_query(call.id)
         return
     
@@ -670,8 +682,8 @@ def handle_callback(call):
         top = get_top_players("wins", 20)
         text = "<b>🏆 ТОП ИГРОКОВ (по победам)</b>\n\n"
         for i, (uid, wins, bullets) in enumerate(top, 1):
-            text += f"{i}. {get_name(uid)} — {wins} побед, {bullets} 💎\n"
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button())
+            text += f"{i}. {get_user_link(uid)} — {wins} побед, {bullets} 💎\n"
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=back_button(), parse_mode="HTML")
         bot.answer_callback_query(call.id)
         return
     
@@ -755,8 +767,19 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, "В этом чате уже есть активная игра!", show_alert=True)
             return
         
-        sent_msg = bot.send_message(chat_id, "🎮 <b>Создается лобби...</b>")
+        # Отправляем сообщение в чат с тегом всех
+        sent_msg = bot.send_message(
+            chat_id,
+            f"🎮 <b>НОВАЯ ИГРА!</b>\n\n"
+            f"{get_user_link(user_id)} создал лобби!\n"
+            f"Макс игроков: {settings['max_players']}\n\n"
+            f"⬇️ Нажми кнопку ниже, чтобы присоединиться!",
+            reply_markup=InlineKeyboardMarkup().add(
+                InlineKeyboardButton("➕ Присоединиться к игре", callback_data=f"join_lobby_{chat_id}")
+            )
+        )
         
+        # Сохраняем игру
         games[chat_id] = {
             "players": [user_id],
             "bets": {},
@@ -771,18 +794,7 @@ def handle_callback(call):
             "used_insurance": {}
         }
         
-        players_list = f"• {get_name(user_id)} — ожидает ставку"
-        
-        bot.edit_message_text(
-            f"🎮 <b>ЛОББИ ИГРЫ</b>\n\n"
-            f"Создатель: {get_name(user_id)}\n"
-            f"Участники (1/{settings['max_players']}):\n{players_list}\n\n"
-            f"⚠️ Ожидаем ставки от всех игроков...",
-            chat_id,
-            sent_msg.message_id,
-            reply_markup=game_lobby_kb(chat_id, True, False)
-        )
-        
+        # Отправляем создателю в ЛС предложение сделать ставку
         bot.send_message(
             user_id,
             f"🎮 Ты создал игру в чате!\n\nСделай ставку (выбери сумму 💎):",
@@ -792,7 +804,56 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Игра создана! Сделай ставку в ЛС.")
         return
     
-    # ПРИСОЕДИНИТЬСЯ
+    # Присоединиться к игре (из кнопки в чате)
+    if call.data.startswith("join_lobby_"):
+        game_chat_id = int(call.data.split("_")[2])
+        
+        if game_chat_id not in games or games[game_chat_id]["status"] != "waiting":
+            bot.answer_callback_query(call.id, "Игра уже началась или удалена!", show_alert=True)
+            return
+        
+        if user_id in games[game_chat_id]["players"]:
+            bot.answer_callback_query(call.id, "Ты уже в игре!", show_alert=True)
+            return
+        
+        if len(games[game_chat_id]["players"]) >= games[game_chat_id]["max_players"]:
+            bot.answer_callback_query(call.id, "Лобби заполнено!", show_alert=True)
+            return
+        
+        games[game_chat_id]["players"].append(user_id)
+        
+        # Обновляем сообщение в чате
+        players_count = len(games[game_chat_id]["players"])
+        max_players = games[game_chat_id]["max_players"]
+        
+        players_list = []
+        for p in games[game_chat_id]["players"]:
+            players_list.append(f"• {get_user_link(p)}")
+        players_text = "\n".join(players_list)
+        
+        bot.edit_message_text(
+            f"🎮 <b>ЛОББИ ИГРЫ</b>\n\n"
+            f"Создатель: {get_user_link(games[game_chat_id]['creator'])}\n"
+            f"Участники ({players_count}/{max_players}):\n{players_text}\n\n"
+            f"⬇️ Нажми кнопку, чтобы присоединиться!",
+            game_chat_id,
+            games[game_chat_id]["message_id"],
+            reply_markup=InlineKeyboardMarkup().add(
+                InlineKeyboardButton("➕ Присоединиться к игре", callback_data=f"join_lobby_{game_chat_id}")
+            )
+        )
+        
+        # Отправляем в ЛС предложение сделать ставку
+        bot.send_message(
+            user_id,
+            f"🎮 Ты присоединился к игре в чате!\n\nСделай ставку (выбери сумму 💎):",
+            reply_markup=bet_kb(game_chat_id)
+        )
+        
+        bot.answer_callback_query(call.id, "Ты присоединился! Сделай ставку в ЛС.")
+        return
+    
+    # ПРИСОЕДИНИТЬСЯ (старый вариант для совместимости)
     if call.data.startswith("join_"):
         game_chat_id = int(call.data.split("_")[1])
         
@@ -809,8 +870,11 @@ def handle_callback(call):
             return
         
         games[game_chat_id]["players"].append(user_id)
+        
+        # Обновляем сообщение в чате
         update_lobby_message(game_chat_id)
         
+        # Отправляем в ЛС предложение сделать ставку
         bot.send_message(
             user_id,
             f"🎮 Ты присоединился к игре в чате!\n\nСделай ставку (выбери сумму 💎):",
@@ -853,7 +917,33 @@ def handle_callback(call):
         
         bot.send_message(user_id, f"✅ Ставка {bet} 💎 принята!\nОжидай начала игры...")
         bot.answer_callback_query(call.id, f"Ставка {bet} 💎 принята!")
-        update_lobby_message(game_chat_id)
+        
+        # Обновляем лобби
+        game = games[game_chat_id]
+        all_bets_placed = all(p in game["bets"] for p in game["players"])
+        
+        if all_bets_placed:
+            players_list = []
+            for p in game["players"]:
+                players_list.append(f"• {get_user_link(p)} — {game['bets'][p]} 💎")
+            players_text = "\n".join(players_list)
+            total_pot = sum(game["bets"].values())
+            
+            bot.edit_message_text(
+                f"🎮 <b>ЛОББИ ИГРЫ</b>\n\n"
+                f"Создатель: {get_user_link(game['creator'])}\n"
+                f"Участники ({len(game['players'])}/{game['max_players']}):\n{players_text}\n\n"
+                f"✅ Все ставки сделаны!\n💰 Общий банк: {total_pot} 💎\n\n"
+                f"Создатель, нажми 'Начать игру'!",
+                game_chat_id,
+                game["message_id"],
+                reply_markup=InlineKeyboardMarkup().add(
+                    InlineKeyboardButton("🚀 Начать игру", callback_data=f"start_game_{game_chat_id}")
+                )
+            )
+        else:
+            update_lobby_message(game_chat_id)
+        
         return
     
     # НАЧАТЬ ИГРУ
@@ -890,7 +980,7 @@ def handle_callback(call):
         
         total_pot = sum(game["bets"].values())
         
-        players_names = "\n".join([f"• {get_name(p)} — {game['bets'][p]} 💎" for p in players_list])
+        players_names = "\n".join([f"• {get_user_link(p)} — {game['bets'][p]} 💎" for p in players_list])
         
         update_chat_stats(game_chat_id, total_games=1, total_bets=total_pot)
         for p in players_list:
@@ -901,10 +991,23 @@ def handle_callback(call):
             f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\n"
             f"Участники:\n{players_names}\n\n"
             f"💰 Общий банк: {total_pot} 💎\n"
-            f"🔫 Первый ход: {get_name(game['current_player'])}",
+            f"🔫 Первый ход: {get_user_link(game['current_player'])}\n\n"
+            f"Игроки, проверьте личные сообщения!",
             game_chat_id,
             game["message_id"],
             reply_markup=game_action_kb(game_chat_id, game["current_player"], game["bets"][game["current_player"]])
+        )
+        
+        # Отправляем ход первому игроку в ЛС
+        current = game["current_player"]
+        current_bet = game["bets"][current]
+        
+        bot.send_message(
+            current,
+            f"🔫 <b>ТВОЙ ХОД!</b>\n\n"
+            f"Ставка: {current_bet} 💎\n\n"
+            f"Выбери действие:",
+            reply_markup=game_action_kb(game_chat_id, current, current_bet)
         )
         
         bot.answer_callback_query(call.id, "Игра начата!")
@@ -994,8 +1097,8 @@ def handle_callback(call):
                 update_user(winner_id, bullets=winner["bullets"] + total_pot, wins=winner["wins"] + 1)
                 
                 bot.edit_message_text(
-                    f"💀 <b>{get_name(player_id)} ВЫБЫЛ!</b>\n\n"
-                    f"🏆 <b>ПОБЕДИТЕЛЬ: {get_name(winner_id)}</b>\n"
+                    f"💀 <b>{get_user_link(player_id)} ВЫБЫЛ!</b>\n\n"
+                    f"🏆 <b>ПОБЕДИТЕЛЬ: {get_user_link(winner_id)}</b>\n"
                     f"💰 Выигрыш: {total_pot} 💎",
                     game_chat_id,
                     game["message_id"],
@@ -1011,14 +1114,14 @@ def handle_callback(call):
             current = game["current_player"]
             current_bet = game["bets"][current]
             
-            players_list = "\n".join([f"• {get_name(p)}" for p in game["players"]])
+            players_list = "\n".join([f"• {get_user_link(p)}" for p in game["players"]])
             total_pot = sum(game["bets"].values())
             
             bot.edit_message_text(
-                f"💀 <b>{get_name(player_id)} ВЫБЫЛ!</b>\n\n"
+                f"💀 <b>{get_user_link(player_id)} ВЫБЫЛ!</b>\n\n"
                 f"Остались:\n{players_list}\n\n"
                 f"💰 Банк: {total_pot} 💎\n"
-                f"🔫 Ход: {get_name(current)}",
+                f"🔫 Ход: {get_user_link(current)}",
                 game_chat_id,
                 game["message_id"],
                 reply_markup=game_action_kb(game_chat_id, current, current_bet)
@@ -1036,9 +1139,9 @@ def handle_callback(call):
             total_pot = sum(game["bets"].values())
             
             bot.edit_message_text(
-                f"🍀 <b>{get_name(player_id)} ВЫЖИЛ!</b>\n\n"
+                f"🍀 <b>{get_user_link(player_id)} ВЫЖИЛ!</b>\n\n"
                 f"💰 Банк: {total_pot} 💎\n"
-                f"🔫 Ход: {get_name(current)}",
+                f"🔫 Ход: {get_user_link(current)}",
                 game_chat_id,
                 game["message_id"],
                 reply_markup=game_action_kb(game_chat_id, current, current_bet)
