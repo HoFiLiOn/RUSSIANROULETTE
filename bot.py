@@ -151,26 +151,43 @@ def update_lobby_message(chat_id):
         f"{status_text}"
     )
     
-    is_creator = (game["creator"] == game["creator"])  # для проверки, но нужно передавать
-    # Просто обновляем с правильной кнопкой
-    
-    bot.edit_message_text(
-        text,
-        chat_id,
-        game["message_id"],
-        reply_markup=game_lobby_kb(chat_id, True, all_bets_placed)
-    )
+    try:
+        bot.edit_message_text(
+            text,
+            chat_id,
+            game["message_id"],
+            reply_markup=game_lobby_kb(chat_id, True, all_bets_placed)
+        )
+    except:
+        pass
 
 # ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start_command(message):
     init_db()
     get_user(message.from_user.id)
-    bot.send_message(
-        message.chat.id,
-        f"<b>🔫 Добро пожаловать в Русскую Рулетку, {message.from_user.first_name}!</b>\n\n{get_rules()}",
-        reply_markup=main_menu()
-    )
+    
+    # Если команда в группе — показываем меню
+    if message.chat.type != "private":
+        bot.send_message(
+            message.chat.id,
+            f"<b>🔫 Русская Рулетка</b>\n\n{get_rules()}",
+            reply_markup=main_menu()
+        )
+    else:
+        # В личке — показываем меню с кнопкой добавить в чат
+        kb = InlineKeyboardMarkup(row_width=1)
+        kb.add(InlineKeyboardButton("➕ Добавить бота в чат", url=f"https://t.me/{BOT_USERNAME}?startgroup=start"))
+        kb.add(InlineKeyboardButton("💰 Баланс", callback_data="balance"))
+        kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
+        kb.add(InlineKeyboardButton("📜 Правила", callback_data="rules"))
+        
+        bot.send_message(
+            message.chat.id,
+            f"<b>🔫 Добро пожаловать в Русскую Рулетку, {message.from_user.first_name}!</b>\n\n"
+            f"Чтобы играть с друзьями, добавь меня в групповой чат!\n\n{get_rules()}",
+            reply_markup=kb
+        )
 
 @bot.message_handler(commands=['rules'])
 def rules_command(message):
@@ -215,12 +232,28 @@ def handle_callback(call):
     
     # Назад
     if call.data == "back":
-        bot.edit_message_text(
-            f"<b>🔫 Главное меню</b>\n\n{get_rules()}",
-            chat_id,
-            message_id,
-            reply_markup=main_menu()
-        )
+        if chat_id != user_id:
+            # В группе
+            bot.edit_message_text(
+                f"<b>🔫 Русская Рулетка</b>\n\n{get_rules()}",
+                chat_id,
+                message_id,
+                reply_markup=main_menu()
+            )
+        else:
+            # В личке
+            kb = InlineKeyboardMarkup(row_width=1)
+            kb.add(InlineKeyboardButton("➕ Добавить бота в чат", url=f"https://t.me/{BOT_USERNAME}?startgroup=start"))
+            kb.add(InlineKeyboardButton("💰 Баланс", callback_data="balance"))
+            kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
+            kb.add(InlineKeyboardButton("📜 Правила", callback_data="rules"))
+            
+            bot.edit_message_text(
+                f"<b>🔫 Главное меню</b>\n\n{get_rules()}",
+                chat_id,
+                message_id,
+                reply_markup=kb
+            )
         bot.answer_callback_query(call.id)
         return
     
@@ -270,8 +303,13 @@ def handle_callback(call):
         bot.answer_callback_query(call.id)
         return
     
-    # СОЗДАТЬ ИГРУ
+    # СОЗДАТЬ ИГРУ — только в группе
     if call.data == "create_game":
+        # Проверяем, что это групповой чат
+        if chat_id == user_id:
+            bot.answer_callback_query(call.id, "❌ Чтобы создать игру, добавь меня в групповой чат!", show_alert=True)
+            return
+        
         # Проверяем, есть ли уже игра в этом чате
         if chat_id in games and games[chat_id]["status"] in ["waiting", "playing"]:
             bot.answer_callback_query(call.id, "В этом чате уже есть активная игра!", show_alert=True)
@@ -280,8 +318,7 @@ def handle_callback(call):
         # Создаем новую игру и отправляем сообщение в чат
         sent_msg = bot.send_message(
             chat_id,
-            f"🎮 <b>Создается лобби...</b>",
-            reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔄 Загрузка", callback_data="none"))
+            f"🎮 <b>Создается лобби...</b>"
         )
         
         games[chat_id] = {
