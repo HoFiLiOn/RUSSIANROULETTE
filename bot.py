@@ -535,6 +535,35 @@ def donate_menu_kb():
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
+# В обработчике колбэков:
+if call.data.startswith("donate_"):
+    parts = call.data.split("_")
+    if len(parts) < 2:
+        bot.answer_callback_query(call.id, "Ошибка!")
+        return
+    
+    stars = int(parts[1])
+    gc_amount = stars * 50
+    
+    prices = [LabeledPrice(label=f"{gc_amount} GC", amount=stars)]
+    
+    try:
+        bot.send_invoice(
+            call.message.chat.id,
+            title="Поддержка бота",
+            description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin",
+            payload=f"donate_{stars}_{gc_amount}",
+            provider_token="",
+            currency="XTR",
+            prices=prices,
+            start_parameter="donate"
+        )
+        bot.answer_callback_query(call.id, "💰 Счёт создан! Оплатите в появившемся окне.")
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"❌ Ошибка: {str(e)[:50]}", show_alert=True)
+        print(f"Donate error: {e}")
+    return
+
 def shop_kb(page):
     kb = InlineKeyboardMarkup(row_width=2)
     items = {
