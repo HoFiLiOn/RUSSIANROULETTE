@@ -462,6 +462,7 @@ def get_help_text(page):
             "• /shop — магазин\n"
             "• /top — топы\n"
             "• /promo КОД — активировать промокод\n"
+            "• /paysupport — поддержка по оплате\n"
             "• /help — эта помощь\n\n"
             "<b>⚙️ ДЛЯ СОЗДАТЕЛЯ ЧАТА:</b>\n"
             "• Настройки чата — в ЛС с ботом → «Настройки чатов»\n\n"
@@ -511,6 +512,7 @@ def private_main_menu(user_id):
     
     return kb
 
+# ========== ДОНАТ (TELEGRAM STARS) ==========
 def donate_menu_kb():
     kb = InlineKeyboardMarkup(row_width=2)
     buttons = [
@@ -534,35 +536,6 @@ def donate_menu_kb():
         kb.add(InlineKeyboardButton(text, callback_data=callback))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
-
-# В обработчике колбэков:
-if call.data.startswith("donate_"):
-    parts = call.data.split("_")
-    if len(parts) < 2:
-        bot.answer_callback_query(call.id, "Ошибка!")
-        return
-    
-    stars = int(parts[1])
-    gc_amount = stars * 50
-    
-    prices = [LabeledPrice(label=f"{gc_amount} GC", amount=stars)]
-    
-    try:
-        bot.send_invoice(
-            call.message.chat.id,
-            title="Поддержка бота",
-            description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin",
-            payload=f"donate_{stars}_{gc_amount}",
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-            start_parameter="donate"
-        )
-        bot.answer_callback_query(call.id, "💰 Счёт создан! Оплатите в появившемся окне.")
-    except Exception as e:
-        bot.answer_callback_query(call.id, f"❌ Ошибка: {str(e)[:50]}", show_alert=True)
-        print(f"Donate error: {e}")
-    return
 
 def shop_kb(page):
     kb = InlineKeyboardMarkup(row_width=2)
@@ -894,6 +867,14 @@ def promo_command(message):
     success, msg = use_promo(user_id, args[1].upper())
     bot.reply_to(message, msg)
 
+@bot.message_handler(commands=['paysupport'])
+def pay_support_command(message):
+    bot.send_message(
+        message.chat.id,
+        "Добровольные пожертвования не подразумевают возврат средств.\n"
+        "Если у вас возникли проблемы с оплатой, свяжитесь с @HoFiLiOnclkc"
+    )
+
 @bot.message_handler(commands=['help'])
 def help_command(message):
     user_id = message.from_user.id
@@ -1013,30 +994,23 @@ def handle_callback(call):
         stars = int(parts[1])
         gc_amount = stars * 50
         
-        # Проверка на слишком большой донат
-        if stars > 1000:
-            bot.answer_callback_query(call.id, "❌ Максимум 1000 Stars!", show_alert=True)
-            return
-        
-        # Бонусы за крупные донаты
-        bonus_text = ""
-        if stars >= 500:
-            bonus_text = "\n🎁 Бонус: VIP 7 дней + Щит"
-        elif stars >= 100:
-            bonus_text = "\n🎁 Бонус: Щит"
-        
-        prices = [LabeledPrice(label=f"{gc_amount} GC", amount=stars)]
+        # ВАЖНО: prices — список с одним LabeledPrice
+        prices = [LabeledPrice(label="XTR", amount=stars)]
         
         try:
             bot.send_invoice(
                 call.message.chat.id,
                 title="Поддержка бота",
-                description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin{bonus_text}",
+                description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin",
                 payload=f"donate_{stars}_{gc_amount}",
-                provider_token="",
-                currency="XTR",
-                prices=prices,
-                start_parameter="donate"
+                provider_token="",           # Обязательно пустая строка
+                currency="XTR",              # Обязательно XTR
+                prices=prices,               # Список с LabeledPrice
+                start_parameter="donate",    # Обязательный параметр
+                need_name=False,
+                need_email=False,
+                need_phone_number=False,
+                need_shipping_address=False
             )
             bot.answer_callback_query(call.id, "💰 Счёт создан! Оплатите в появившемся окне.")
         except Exception as e:
@@ -1802,21 +1776,9 @@ def handle_successful_payment(message):
     new_gc = user["gc"] + gc_amount
     update_user(user_id, gc=new_gc)
     
-    # Бонусы за крупные донаты
-    bonus_text = ""
-    if stars >= 500:
-        update_user(user_id, vip_level=7, vip_until=(datetime.now() + timedelta(days=7)).isoformat())
-        user = get_user(user_id)
-        update_user(user_id, shields=user["shields"] + 1)
-        bonus_text = "\n🎁 Бонус: VIP 7 дней + Щит"
-    elif stars >= 100:
-        user = get_user(user_id)
-        update_user(user_id, shields=user["shields"] + 1)
-        bonus_text = "\n🎁 Бонус: Щит"
-    
     bot.send_message(
         user_id,
-        f"✅ Спасибо за поддержку!\n\n⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin{bonus_text}\n\n💰 Новый баланс: {new_gc} GC",
+        f"✅ Спасибо за поддержку!\n\n⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin\n\n💰 Новый баланс: {new_gc} GC",
         reply_markup=private_main_menu(user_id)
     )
     
