@@ -511,44 +511,27 @@ def private_main_menu(user_id):
     
     return kb
 
-# ========== ДОНАТ (TELEGRAM STARS) ==========
-def donate_menu_kb(page=1):
+def donate_menu_kb():
     kb = InlineKeyboardMarkup(row_width=2)
-    if page == 1:
-        buttons = [
-            ("⭐ 1 Star → 50 GC", "donate_1", 1, 50),
-            ("⭐ 2 Stars → 100 GC", "donate_2", 2, 100),
-            ("⭐ 5 Stars → 250 GC", "donate_5", 5, 250),
-            ("⭐ 10 Stars → 500 GC", "donate_10", 10, 500),
-            ("⭐ 20 Stars → 1,000 GC", "donate_20", 20, 1000),
-            ("⭐ 50 Stars → 2,500 GC", "donate_50", 50, 2500),
-            ("⭐ 100 Stars → 5,000 GC", "donate_100", 100, 5000),
-            ("⭐ 150 Stars → 7,500 GC", "donate_150", 150, 7500),
-            ("⭐ 200 Stars → 10,000 GC", "donate_200", 200, 10000),
-            ("⭐ 250 Stars → 12,500 GC", "donate_250", 250, 12500),
-            ("⭐ 300 Stars → 15,000 GC", "donate_300", 300, 15000),
-            ("⭐ 400 Stars → 20,000 GC", "donate_400", 400, 20000),
-            ("⭐ 500 Stars → 25,000 GC + VIP 7д", "donate_500", 500, 25000),
-            ("⭐ 750 Stars → 37,500 GC + VIP 14д + Щит", "donate_750", 750, 37500),
-            ("⭐ 1000 Stars → 50,000 GC + VIP 30д + Алмазный щит", "donate_1000", 1000, 50000)
-        ]
-        for text, callback, stars, gc in buttons:
-            kb.add(InlineKeyboardButton(text, callback_data=callback))
-        kb.add(InlineKeyboardButton("💸 Своя сумма", callback_data="donate_custom"))
-        kb.add(InlineKeyboardButton("▶️ Страница 2", callback_data="donate_page_2"))
-    else:
-        buttons = [
-            ("⭐ 1500 Stars → 75,000 GC + VIP 30д + Щит", "donate_1500", 1500, 75000),
-            ("⭐ 2000 Stars → 100,000 GC + VIP 30д + Алмазный щит", "donate_2000", 2000, 100000),
-            ("⭐ 2500 Stars → 125,000 GC + VIP 30д + 2 Щита", "donate_2500", 2500, 125000),
-            ("⭐ 3000 Stars → 150,000 GC + VIP 60д + Алмазный щит", "donate_3000", 3000, 150000),
-            ("⭐ 5000 Stars → 250,000 GC + VIP 90д + 2 Алмазных щита", "donate_5000", 5000, 250000),
-            ("⭐ 10000 Stars → 500,000 GC + VIP 180д + 5 Алмазных щитов", "donate_10000", 10000, 500000)
-        ]
-        for text, callback, stars, gc in buttons:
-            kb.add(InlineKeyboardButton(text, callback_data=callback))
-        kb.add(InlineKeyboardButton("◀️ Страница 1", callback_data="donate_page_1"))
-    
+    buttons = [
+        ("⭐ 1 Star → 50 GC", "donate_1"),
+        ("⭐ 2 Stars → 100 GC", "donate_2"),
+        ("⭐ 5 Stars → 250 GC", "donate_5"),
+        ("⭐ 10 Stars → 500 GC", "donate_10"),
+        ("⭐ 20 Stars → 1,000 GC", "donate_20"),
+        ("⭐ 50 Stars → 2,500 GC", "donate_50"),
+        ("⭐ 100 Stars → 5,000 GC", "donate_100"),
+        ("⭐ 150 Stars → 7,500 GC", "donate_150"),
+        ("⭐ 200 Stars → 10,000 GC", "donate_200"),
+        ("⭐ 250 Stars → 12,500 GC", "donate_250"),
+        ("⭐ 300 Stars → 15,000 GC", "donate_300"),
+        ("⭐ 400 Stars → 20,000 GC", "donate_400"),
+        ("⭐ 500 Stars → 25,000 GC", "donate_500"),
+        ("⭐ 750 Stars → 37,500 GC", "donate_750"),
+        ("⭐ 1000 Stars → 50,000 GC", "donate_1000")
+    ]
+    for text, callback in buttons:
+        kb.add(InlineKeyboardButton(text, callback_data=callback))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
@@ -987,62 +970,49 @@ def handle_callback(call):
         bot.edit_message_text(
             "⭐ <b>ПОДДЕРЖКА ПРОЕКТА</b>\n\nВыберите сумму доната:",
             chat_id, message_id,
-            reply_markup=donate_menu_kb(1)
+            reply_markup=donate_menu_kb()
         )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if call.data == "donate_page_1":
-        bot.edit_message_text(
-            "⭐ <b>ПОДДЕРЖКА ПРОЕКТА</b>\n\nВыберите сумму доната:",
-            chat_id, message_id,
-            reply_markup=donate_menu_kb(1)
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if call.data == "donate_page_2":
-        bot.edit_message_text(
-            "⭐ <b>ПОДДЕРЖКА ПРОЕКТА</b>\n\nВыберите сумму доната:",
-            chat_id, message_id,
-            reply_markup=donate_menu_kb(2)
-        )
-        bot.answer_callback_query(call.id)
-        return
-    
-    if call.data == "donate_custom":
-        bot.send_message(user_id, "💸 Введите количество GunCoin (GC), которое хотите получить (от 50 до 500,000 GC):\n\nКурс: 1 Star = 50 GC")
-        bot.register_next_step_handler_by_chat_id(user_id, lambda m: donate_custom_handler(m, chat_id, message_id))
         bot.answer_callback_query(call.id)
         return
     
     if call.data.startswith("donate_"):
         parts = call.data.split("_")
+        if len(parts) < 2:
+            bot.answer_callback_query(call.id, "Ошибка!")
+            return
+        
         stars = int(parts[1])
         gc_amount = stars * 50
         
+        # Проверка на слишком большой донат
+        if stars > 1000:
+            bot.answer_callback_query(call.id, "❌ Максимум 1000 Stars!", show_alert=True)
+            return
+        
         # Бонусы за крупные донаты
         bonus_text = ""
-        if stars >= 1000:
-            bonus_text = "\n🎁 Бонус: VIP 30 дней + Алмазный щит"
-        elif stars >= 500:
+        if stars >= 500:
             bonus_text = "\n🎁 Бонус: VIP 7 дней + Щит"
         elif stars >= 100:
             bonus_text = "\n🎁 Бонус: Щит"
         
         prices = [LabeledPrice(label=f"{gc_amount} GC", amount=stars)]
         
-        bot.send_invoice(
-            chat_id,
-            title="Поддержка бота",
-            description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin{bonus_text}",
-            payload=f"donate_{stars}_{gc_amount}",
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-            start_parameter="donate"
-        )
-        bot.answer_callback_query(call.id)
+        try:
+            bot.send_invoice(
+                call.message.chat.id,
+                title="Поддержка бота",
+                description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin{bonus_text}",
+                payload=f"donate_{stars}_{gc_amount}",
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+                start_parameter="donate"
+            )
+            bot.answer_callback_query(call.id, "💰 Счёт создан! Оплатите в появившемся окне.")
+        except Exception as e:
+            bot.answer_callback_query(call.id, f"❌ Ошибка: {str(e)[:50]}", show_alert=True)
+            print(f"Donate error: {e}")
         return
     
     # СТАТА
@@ -1805,12 +1775,7 @@ def handle_successful_payment(message):
     
     # Бонусы за крупные донаты
     bonus_text = ""
-    if stars >= 1000:
-        update_user(user_id, vip_level=30, vip_until=(datetime.now() + timedelta(days=30)).isoformat())
-        user = get_user(user_id)
-        update_user(user_id, diamond_shield=user["diamond_shield"] + 1)
-        bonus_text = "\n🎁 Бонус: VIP 30 дней + Алмазный щит"
-    elif stars >= 500:
+    if stars >= 500:
         update_user(user_id, vip_level=7, vip_until=(datetime.now() + timedelta(days=7)).isoformat())
         user = get_user(user_id)
         update_user(user_id, shields=user["shields"] + 1)
@@ -1829,46 +1794,6 @@ def handle_successful_payment(message):
     log_admin(user_id, "donate", str(user_id), f"{stars} stars -> {gc_amount} gc")
 
 # ========== ОБРАБОТЧИКИ ==========
-def donate_custom_handler(message, original_chat_id, original_message_id):
-    try:
-        gc_amount = int(message.text)
-        if gc_amount < 50:
-            bot.send_message(message.chat.id, "❌ Минимум 50 GC (1 Star)")
-            return
-        if gc_amount > 500000:
-            bot.send_message(message.chat.id, "❌ Максимум 500,000 GC (10,000 Stars)")
-            return
-        
-        stars = gc_amount // 50
-        if stars > 10000:
-            stars = 10000
-            gc_amount = stars * 50
-        
-        # Бонусы за крупные донаты
-        bonus_text = ""
-        if stars >= 1000:
-            bonus_text = "\n🎁 Бонус: VIP 30 дней + Алмазный щит"
-        elif stars >= 500:
-            bonus_text = "\n🎁 Бонус: VIP 7 дней + Щит"
-        elif stars >= 100:
-            bonus_text = "\n🎁 Бонус: Щит"
-        
-        prices = [LabeledPrice(label=f"{gc_amount} GC", amount=stars)]
-        
-        bot.send_invoice(
-            message.chat.id,
-            title="Поддержка бота",
-            description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin{bonus_text}",
-            payload=f"donate_{stars}_{gc_amount}",
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-            start_parameter="donate"
-        )
-        bot.edit_message_reply_markup(original_chat_id, original_message_id, reply_markup=donate_menu_kb(1))
-    except:
-        bot.send_message(message.chat.id, "❌ Введите число!")
-
 def promo_enter_handler(message, original_chat_id, original_message_id):
     success, msg = use_promo(message.from_user.id, message.text.upper())
     bot.send_message(message.chat.id, msg)
