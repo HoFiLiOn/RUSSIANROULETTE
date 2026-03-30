@@ -253,17 +253,38 @@ def is_chat_admin(user_id, chat_id):
         return False
 
 def is_chat_owner(user_id, chat_id):
+    """Проверяет, является ли пользователь создателем чата"""
     settings = get_chat_settings(chat_id)
     if settings["owner_id"] == user_id:
         return True
+    
     try:
         member = bot.get_chat_member(chat_id, user_id)
         if member.status == 'creator':
-            update_chat_settings(chat_id, owner_id=user_id, name=member.chat.title)
+            update_chat_settings(chat_id, owner_id=user_id, name=member.user.first_name)
             return True
-        return False
-    except:
-        return False
+    except Exception as e:
+        print(f"Error getting chat member: {e}")
+    
+    return False
+
+def get_chat_owner(chat_id):
+    """Возвращает ID создателя чата"""
+    settings = get_chat_settings(chat_id)
+    if settings["owner_id"] != 0:
+        return settings["owner_id"]
+    
+    try:
+        admins = bot.get_chat_administrators(chat_id)
+        for admin in admins:
+            if admin.status == 'creator':
+                owner_id = admin.user.id
+                update_chat_settings(chat_id, owner_id=owner_id, name=admin.user.first_name)
+                return owner_id
+    except Exception as e:
+        print(f"Error getting chat admins: {e}")
+    
+    return 0
 
 def get_vip_multiplier(user_id):
     user = get_user(user_id)
@@ -401,8 +422,8 @@ def delete_promo(code):
 games = {}
 
 # ========== УТИЛИТЫ ==========
-def send_chat_message(chat_id, text, delete_after=5):
-    """Отправляет сообщение в чат и удаляет через указанное количество секунд"""
+def send_chat_message(chat_id, text, delete_after=0):
+    """Отправляет сообщение в чат (не удаляет, если delete_after=0)"""
     try:
         msg = bot.send_message(chat_id, text, parse_mode="HTML")
         if delete_after > 0:
@@ -447,8 +468,7 @@ def get_help_text(page):
             "<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ:</b>\n"
             "• 10 ₽ = 350 GC\n\n"
             "<b>📌 ВАЖНО:</b>\n"
-            "• Все действия игроков пишутся в чате\n"
-            "• Сообщения автоматически удаляются через 5 секунд"
+            "• Все действия игроков пишутся в чате"
         )
     elif page == 2:
         return (
@@ -506,8 +526,7 @@ def get_welcome_text():
         "• 10 ₽ = 350 GC\n"
         "• /donate — реквизиты\n\n"
         "<b>📌 ВАЖНО:</b>\n"
-        "• Все действия игроков пишутся в чате\n"
-        "• Сообщения автоматически удаляются\n\n"
+        "• Все действия игроков пишутся в чате\n\n"
         "<b>📌 ПОДРОБНЕЕ:</b>\n"
         "• /help — вся информация\n\n"
         "👇 Нажми кнопку, чтобы начать!"
@@ -609,7 +628,7 @@ def admin_promocodes_kb():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton("➕ Создать промокод", callback_data="admin_create_promo"))
     kb.add(InlineKeyboardButton("📋 Список промокодов", callback_data="admin_list_promos"))
-    kb.add(InlineKeyboardButton("??️ Удалить промокод", callback_data="admin_delete_promo"))
+    kb.add(InlineKeyboardButton("🗑️ Удалить промокод", callback_data="admin_delete_promo"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
     return kb
 
@@ -721,8 +740,11 @@ def start_command(message):
         )
     else:
         update_chat_settings(chat_id, name=message.chat.title)
-        if is_chat_owner(user_id, chat_id):
-            update_chat_settings(chat_id, owner_id=user_id)
+        
+        # Обновляем владельца чата
+        owner_id = get_chat_owner(chat_id)
+        if owner_id:
+            update_chat_settings(chat_id, owner_id=owner_id)
         
         bot.send_message(
             chat_id,
@@ -738,25 +760,25 @@ def game_command(message):
     chat_id = message.chat.id
     
     if message.chat.type == "private":
-        send_chat_message(chat_id, "❌ Игры создаются только в чатах! Добавь бота в группу и напиши /game там.", 5)
+        send_chat_message(chat_id, "❌ Игры создаются только в чатах! Добавь бота в группу и напиши /game там.", 0)
         return
     
     user = get_user(user_id)
     if user["banned"]:
-        send_chat_message(chat_id, "❌ Вы забанены!", 5)
+        send_chat_message(chat_id, "❌ Вы забанены!", 0)
         return
     
     settings = get_chat_settings(chat_id)
     if settings["banned"]:
-        send_chat_message(chat_id, "❌ Этот чат забанен!", 5)
+        send_chat_message(chat_id, "❌ Этот чат забанен!", 0)
         return
     
     if not settings['game_enabled']:
-        send_chat_message(chat_id, "❌ Игры отключены создателем чата!", 5)
+        send_chat_message(chat_id, "❌ Игры отключены создателем чата!", 0)
         return
     
     if chat_id in games and games[chat_id]["status"] in ["waiting", "playing"]:
-        send_chat_message(chat_id, "❌ В этом чате уже есть активная игра!", 5)
+        send_chat_message(chat_id, "❌ В этом чате уже есть активная игра!", 0)
         return
     
     sent = bot.send_message(chat_id, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(user_id)} создал лобби!\nМакс игроков: {settings['max_players']}\nМин ставка: {settings['min_bet']} GC\n\n⬇️ Нажми кнопку!",
@@ -769,13 +791,12 @@ def game_command(message):
         "used_insurance": {}
     }
     
-    # Отправляем в ЛС сообщение о ставке (только для ставки, так как это приватно)
     bot.send_message(user_id, f"✅ Игра создана! Сделай ставку:", reply_markup=bet_kb(chat_id))
 
 @bot.message_handler(commands=['balance'])
 def balance_command(message):
     if message.chat.type != "private":
-        send_chat_message(message.chat.id, "❌ Используй /balance в личных сообщениях с ботом!", 5)
+        send_chat_message(message.chat.id, "❌ Используй /balance в личных сообщениях с ботом!", 0)
         return
     
     user_id = message.from_user.id
@@ -805,7 +826,7 @@ def balance_command(message):
 @bot.message_handler(commands=['daily'])
 def daily_command(message):
     if message.chat.type != "private":
-        send_chat_message(message.chat.id, "❌ Используй /daily в личных сообщениях с ботом!", 5)
+        send_chat_message(message.chat.id, "❌ Используй /daily в личных сообщениях с ботом!", 0)
         return
     
     user_id = message.from_user.id
@@ -836,7 +857,7 @@ def daily_command(message):
 @bot.message_handler(commands=['shop'])
 def shop_command(message):
     if message.chat.type != "private":
-        send_chat_message(message.chat.id, "❌ Используй /shop в личных сообщениях с ботом!", 5)
+        send_chat_message(message.chat.id, "❌ Используй /shop в личных сообщениях с ботом!", 0)
         return
     
     user_id = message.from_user.id
@@ -850,7 +871,7 @@ def shop_command(message):
 @bot.message_handler(commands=['top'])
 def top_command(message):
     if message.chat.type != "private":
-        send_chat_message(message.chat.id, "❌ Используй /top в личных сообщениях с ботом!", 5)
+        send_chat_message(message.chat.id, "❌ Используй /top в личных сообщениях с ботом!", 0)
         return
     
     user_id = message.from_user.id
@@ -864,7 +885,7 @@ def top_command(message):
 @bot.message_handler(commands=['promo'])
 def promo_command(message):
     if message.chat.type != "private":
-        send_chat_message(message.chat.id, "❌ Используй /promo в личных сообщениях с ботом!", 5)
+        send_chat_message(message.chat.id, "❌ Используй /promo в личных сообщениях с ботом!", 0)
         return
     
     user_id = message.from_user.id
@@ -886,7 +907,7 @@ def donate_command(message):
     chat_id = message.chat.id
     
     if message.chat.type != "private":
-        send_chat_message(chat_id, "❌ Используй /donate в личных сообщениях с ботом!", 5)
+        send_chat_message(chat_id, "❌ Используй /donate в личных сообщениях с ботом!", 0)
         return
     
     user = get_user(user_id)
@@ -910,7 +931,7 @@ def help_command(message):
     chat_id = message.chat.id
     
     if message.chat.type != "private":
-        send_chat_message(chat_id, "❌ Используй /help в личных сообщениях с ботом!", 5)
+        send_chat_message(chat_id, "❌ Используй /help в личных сообщениях с ботом!", 0)
         return
     
     user = get_user(user_id)
@@ -938,14 +959,10 @@ def handle_my_chat_member(update):
         if status in ['member', 'administrator']:
             update_chat_settings(chat_id, name=chat_title)
             
-            try:
-                admins = bot.get_chat_administrators(chat_id)
-                for admin in admins:
-                    if admin.status == 'creator':
-                        update_chat_settings(chat_id, owner_id=admin.user.id)
-                        break
-            except:
-                pass
+            # Получаем создателя чата
+            owner_id = get_chat_owner(chat_id)
+            if owner_id:
+                update_chat_settings(chat_id, owner_id=owner_id)
             
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("🎮 Создать игру", callback_data="create_game"))
@@ -1011,7 +1028,7 @@ def handle_callback(call):
         bot.answer_callback_query(call.id)
         return
     
-    # ДОНАТ (КАРТА)
+    # ДОНАТ
     if call.data == "donate_menu":
         text = """💳 <b>ПОДДЕРЖАТЬ ПРОЕКТ</b>
 
@@ -1434,7 +1451,7 @@ def handle_callback(call):
             return
         for gid in list(games.keys()):
             del games[gid]
-            send_chat_message(gid, "⏹️ Игра принудительно завершена администратором", 5)
+            send_chat_message(gid, "⏹️ Игра принудительно завершена администратором", 0)
         bot.answer_callback_query(call.id, "Все игры завершены")
         bot.edit_message_reply_markup(chat_id, message_id, reply_markup=admin_panel_kb())
         return
@@ -1563,7 +1580,6 @@ def handle_callback(call):
             "used_insurance": {}
         }
         
-        # Отправляем в ЛС сообщение о ставке
         bot.send_message(user_id, f"✅ Игра создана! Сделай ставку:", reply_markup=bet_kb(chat_id))
         bot.answer_callback_query(call.id, "Игра создана! Сделай ставку в ЛС")
         return
@@ -1584,9 +1600,9 @@ def handle_callback(call):
         games[gid]["players"].append(user_id)
         update_lobby_message(gid)
         
-        # Сообщение в чат о присоединении
+        # Сообщение в чат о присоединении (не удаляется)
         player_name = get_name(user_id)
-        send_chat_message(gid, f"➕ {player_name} присоединился к игре!", 5)
+        bot.send_message(gid, f"➕ {player_name} присоединился к игре!")
         
         bot.send_message(user_id, f"🎮 Ты присоединился! Сделай ставку:", reply_markup=bet_kb(gid))
         bot.answer_callback_query(call.id, "Ты присоединился! Сделай ставку в ЛС")
@@ -1601,7 +1617,7 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, "Только создатель!", show_alert=True)
             return
         del games[gid]
-        send_chat_message(gid, "❌ Игра отменена", 5)
+        bot.send_message(gid, "❌ Игра отменена")
         bot.answer_callback_query(call.id, "Игра отменена")
         return
     
@@ -1628,9 +1644,9 @@ def handle_callback(call):
         games[gid]["bets"][user_id] = bet
         update_user(user_id, gc=user["gc"] - bet)
         
-        # Сообщение в чат о ставке
+        # Сообщение в чат о ставке (не удаляется)
         player_name = get_name(user_id)
-        send_chat_message(gid, f"💰 {player_name} сделал ставку {bet} GC!", 5)
+        bot.send_message(gid, f"💰 {player_name} сделал ставку {bet} GC!")
         
         bot.send_message(user_id, f"✅ Ставка {bet} GC принята!")
         bot.answer_callback_query(call.id, f"Ставка {bet} GC принята!")
@@ -1671,12 +1687,12 @@ def handle_callback(call):
         # Обновляем сообщение лобби
         bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\nУчастники:\n{players_text}\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
         
-        # Сообщение в чат с ходом первого игрока
+        # Сообщение в чат с ходом первого игрока (не удаляется)
         current = game["current_player"]
         current_name = get_name(current)
-        send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+        bot.send_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:")
         
-        # Отправляем кнопки в чат (не в ЛС!)
+        # Отправляем кнопки в чат (не удаляются)
         bot.send_message(gid, f"🔫 {current_name}, твой ход!",
                          reply_markup=game_action_kb(gid, current, game['bets'][current]))
         
@@ -1713,11 +1729,11 @@ def handle_callback(call):
         
         game["chambers"][pid] = random.randint(1, 6)
         
-        # Сообщение в чат о прокрутке барабана
+        # Сообщение в чат о прокрутке барабана (не удаляется)
         player_name = get_name(pid)
-        send_chat_message(gid, f"🔄 {player_name} прокрутил барабан!", 5)
+        bot.send_message(gid, f"🔄 {player_name} прокрутил барабан!")
         
-        # Отправляем кнопки в чат
+        # Отправляем кнопки в чат (не удаляются)
         bot.send_message(gid, f"🔫 {player_name}, готов стрелять?",
                          reply_markup=game_action_kb(gid, pid, bet))
         
@@ -1782,8 +1798,8 @@ def handle_callback(call):
             update_user(pid, losses=u["losses"] + 1, gc=u["gc"] + refund)
             update_rating(pid, False)
             
-            # Сообщение в чат о вылете
-            send_chat_message(gid, f"💀 {player_name} ВЫБЫЛ! (Пуля оказалась в барабане)", 5)
+            # Сообщение в чат о вылете (не удаляется)
+            bot.send_message(gid, f"💀 {player_name} ВЫБЫЛ! (Пуля оказалась в барабане)")
             
             if len(game["players"]) == 1:
                 winner_id = game["players"][0]
@@ -1798,8 +1814,8 @@ def handle_callback(call):
                 winner_name = get_name(winner_id)
                 bot.edit_message_text(f"💀 {player_name} ВЫБЫЛ!\n\n🏆 ПОБЕДИТЕЛЬ: {winner_name}\n💰 Выигрыш: {win_amount} GC", gid, game["message_id"])
                 
-                # Сообщение в чат о победе
-                send_chat_message(gid, f"🏆 {winner_name} ПОБЕДИЛ и забирает {win_amount} GC!", 5)
+                # Сообщение в чат о победе (не удаляется)
+                bot.send_message(gid, f"🏆 {winner_name} ПОБЕДИЛ и забирает {win_amount} GC!")
                 
                 bot.send_message(winner_id, f"🏆 Ты победил! +{win_amount} GC")
                 del games[gid]
@@ -1813,8 +1829,8 @@ def handle_callback(call):
             remaining_names = ", ".join([get_name(p) for p in game["players"]])
             bot.edit_message_text(f"💀 {player_name} ВЫБЫЛ!\n\nОстались: {remaining_names}\n💰 Банк: {total_pot} GC", gid, game["message_id"])
             
-            # Сообщение в чат о следующем ходе
-            send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+            # Сообщение в чат о следующем ходе (не удаляется)
+            bot.send_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:")
             bot.send_message(gid, f"🔫 {current_name}, твой ход!",
                              reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Ты выбыл")
@@ -1827,8 +1843,8 @@ def handle_callback(call):
             current_name = get_name(current)
             bot.edit_message_text(f"🍀 {player_name} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
             
-            # Сообщение в чат о следующем ходе
-            send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+            # Сообщение в чат о следующем ходе (не удаляется)
+            bot.send_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:")
             bot.send_message(gid, f"🔫 {current_name}, твой ход!",
                              reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Пусто! Ты выжил")
