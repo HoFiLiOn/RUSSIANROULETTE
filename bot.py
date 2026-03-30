@@ -15,7 +15,7 @@ MAX_PLAYERS_LIMIT = 15
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # ========== КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ ==========
-game_cooldowns = {}  # user_id -> время последнего действия
+game_cooldowns = {}
 
 def check_game_cooldown(user_id):
     """Проверяет КД для игровых действий (5 секунд)"""
@@ -973,7 +973,7 @@ def admin_panel_kb():
     kb.add(InlineKeyboardButton("📅 Сезон", callback_data="admin_season_menu"))
     kb.add(InlineKeyboardButton("🎖️ Ранги", callback_data="admin_ranks_menu"))
     kb.add(InlineKeyboardButton("🏆 Рейтинг чатов", callback_data="admin_chat_rating_menu"))
-    kb.add(InlineKeyboardButton("💰 Выдать GC", callback_data="admin_add_gc"))
+    kb.add(InlineKeyboardButton("?? Выдать GC", callback_data="admin_add_gc"))
     kb.add(InlineKeyboardButton("💸 Забрать GC", callback_data="admin_remove_gc"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
@@ -2112,7 +2112,7 @@ def handle_callback(call):
         return
     
     if call.data.startswith("spin_"):
-        # КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ
+        # Проверка КД
         if not check_game_cooldown(user_id):
             bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
             return
@@ -2121,12 +2121,16 @@ def handle_callback(call):
         gid = int(parts[1])
         pid = int(parts[2])
         bet = int(parts[3])
+        
         if gid not in games or games[gid]["status"] != "playing":
             bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
             return
+        
         game = games[gid]
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
         if game["current_player"] != pid:
-            bot.answer_callback_query(call.id, "❌ Не ваш ход!", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
             return
         
         game["chambers"][pid] = random.randint(1, 6)
@@ -2142,7 +2146,7 @@ def handle_callback(call):
         return
     
     if call.data.startswith("shoot_"):
-        # КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ
+        # Проверка КД
         if not check_game_cooldown(user_id):
             bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
             return
@@ -2151,12 +2155,16 @@ def handle_callback(call):
         gid = int(parts[1])
         pid = int(parts[2])
         bet = int(parts[3])
+        
         if gid not in games or games[gid]["status"] != "playing":
             bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
             return
+        
         game = games[gid]
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
         if game["current_player"] != pid:
-            bot.answer_callback_query(call.id, "❌ Не ваш ход!", show_alert=True)
+            bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
             return
         
         # Удаляем сообщение с кнопками
