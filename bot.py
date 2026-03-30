@@ -538,10 +538,11 @@ def private_main_menu(user_id):
     
     return kb
 
-# ========== ДОНАТ (КАРТА) ==========
+# ========== ДОНАТ (КАРТА + DonationAlerts) ==========
 def donate_menu_kb():
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("💳 Показать реквизиты", callback_data="donate_card"))
+    kb.add(InlineKeyboardButton("💳 Карта", callback_data="donate_card"))
+    kb.add(InlineKeyboardButton("🎁 DonationAlerts", url="https://www.donationalerts.com/r/FxHoFiLiOn"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
@@ -608,7 +609,7 @@ def admin_promocodes_kb():
     kb = InlineKeyboardMarkup(row_width=1)
     kb.add(InlineKeyboardButton("➕ Создать промокод", callback_data="admin_create_promo"))
     kb.add(InlineKeyboardButton("📋 Список промокодов", callback_data="admin_list_promos"))
-    kb.add(InlineKeyboardButton("🗑️ Удалить промокод", callback_data="admin_delete_promo"))
+    kb.add(InlineKeyboardButton("??️ Удалить промокод", callback_data="admin_delete_promo"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
     return kb
 
@@ -651,9 +652,12 @@ def game_start_kb(chat_id):
     return kb
 
 def game_action_kb(chat_id, user_id, bet):
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("🔫 Выстрелить", callback_data=f"shoot_{chat_id}_{user_id}_{bet}"))
-    kb.add(InlineKeyboardButton("🔄 Крутить барабан", callback_data=f"spin_{chat_id}_{user_id}_{bet}"))
+    """Кнопки для игры в чате"""
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("🔫 Выстрелить", callback_data=f"shoot_{chat_id}_{user_id}_{bet}"),
+        InlineKeyboardButton("🔄 Крутить барабан", callback_data=f"spin_{chat_id}_{user_id}_{bet}")
+    )
     return kb
 
 def bet_kb(chat_id):
@@ -765,7 +769,7 @@ def game_command(message):
         "used_insurance": {}
     }
     
-    # Отправляем в ЛС сообщение о ставке
+    # Отправляем в ЛС сообщение о ставке (только для ставки, так как это приватно)
     bot.send_message(user_id, f"✅ Игра создана! Сделай ставку:", reply_markup=bet_kb(chat_id))
 
 @bot.message_handler(commands=['balance'])
@@ -894,18 +898,10 @@ def donate_command(message):
 
 Если вам нравится бот и вы хотите помочь его развитию, вы можете поддержать проект!
 
-<b>💳 Карта для поддержки:</b>
-<code>2202 2081 8206 1235</code>
-
 <b>💰 Курс:</b>
 10 ₽ = 350 GC
 
-<b>📌 Как получить GC:</b>
-1. Переведите любую сумму на карту
-2. Напишите @HoFiLiOnclkc с чеком
-3. Получите GC на свой аккаунт
-
-Спасибо за поддержку! ❤️"""
+Выберите способ поддержки:"""
     bot.send_message(chat_id, text, reply_markup=donate_menu_kb())
 
 @bot.message_handler(commands=['help'])
@@ -1021,18 +1017,10 @@ def handle_callback(call):
 
 Если вам нравится бот и вы хотите помочь его развитию, вы можете поддержать проект!
 
-<b>💳 Карта для поддержки:</b>
-<code>2202 2081 8206 1235</code>
-
 <b>💰 Курс:</b>
 10 ₽ = 350 GC
 
-<b>📌 Как получить GC:</b>
-1. Переведите любую сумму на карту
-2. Напишите @HoFiLiOnclkc с чеком
-3. Получите GC на свой аккаунт
-
-Спасибо за поддержку! ❤️"""
+Выберите способ поддержки:"""
         bot.edit_message_text(text, chat_id, message_id, reply_markup=donate_menu_kb())
         bot.answer_callback_query(call.id)
         return
@@ -1575,6 +1563,7 @@ def handle_callback(call):
             "used_insurance": {}
         }
         
+        # Отправляем в ЛС сообщение о ставке
         bot.send_message(user_id, f"✅ Игра создана! Сделай ставку:", reply_markup=bet_kb(chat_id))
         bot.answer_callback_query(call.id, "Игра создана! Сделай ставку в ЛС")
         return
@@ -1679,12 +1668,17 @@ def handle_callback(call):
         
         players_text = "\n".join([f"• {get_user_link(p)} — {game['bets'][p]} GC" for p in players])
         
-        # Показываем кто ходит
-        current_player_name = get_name(game["current_player"])
-        bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\nУчастники:\n{players_text}\n\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_player_name}", gid, game["message_id"])
+        # Обновляем сообщение лобби
+        bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\nУчастники:\n{players_text}\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
         
-        # Сообщение в чат о начале игры
-        send_chat_message(gid, f"🎲 ИГРА НАЧАЛАСЬ! ХОДИТ: {current_player_name}", 5)
+        # Сообщение в чат с ходом первого игрока
+        current = game["current_player"]
+        current_name = get_name(current)
+        send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+        
+        # Отправляем кнопки в чат (не в ЛС!)
+        bot.send_message(gid, f"🔫 {current_name}, твой ход!",
+                         reply_markup=game_action_kb(gid, current, game['bets'][current]))
         
         conn = sqlite3.connect("roulette.db")
         c = conn.cursor()
@@ -1698,8 +1692,6 @@ def handle_callback(call):
             u = get_user(p)
             update_user(p, total_games=u["total_games"] + 1)
         
-        current = game["current_player"]
-        bot.send_message(current, f"🔫 ТВОЙ ХОД!\nСтавка: {game['bets'][current]} GC\nВыбери действие:", reply_markup=game_action_kb(gid, current, game['bets'][current]))
         bot.answer_callback_query(call.id, "Игра начата!")
         return
     
@@ -1725,7 +1717,10 @@ def handle_callback(call):
         player_name = get_name(pid)
         send_chat_message(gid, f"🔄 {player_name} прокрутил барабан!", 5)
         
-        bot.send_message(pid, f"🔄 Барабан прокручен!\nСтавка: {bet} GC\nГотов стрелять?", reply_markup=game_action_kb(gid, pid, bet))
+        # Отправляем кнопки в чат
+        bot.send_message(gid, f"🔫 {player_name}, готов стрелять?",
+                         reply_markup=game_action_kb(gid, pid, bet))
+        
         bot.answer_callback_query(call.id, "Барабан прокручен!")
         return
     
@@ -1816,12 +1811,12 @@ def handle_callback(call):
             total_pot = sum(game["bets"].values())
             current_name = get_name(current)
             remaining_names = ", ".join([get_name(p) for p in game["players"]])
-            bot.edit_message_text(f"💀 {player_name} ВЫБЫЛ!\n\nОстались: {remaining_names}\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_name}", gid, game["message_id"])
+            bot.edit_message_text(f"💀 {player_name} ВЫБЫЛ!\n\nОстались: {remaining_names}\n💰 Банк: {total_pot} GC", gid, game["message_id"])
             
             # Сообщение в чат о следующем ходе
-            send_chat_message(gid, f"🔫 СЛЕДУЮЩИЙ ХОД: {current_name}", 5)
-            
-            bot.send_message(current, f"🔫 ТВОЙ ХОД!\nСтавка: {game['bets'][current]} GC", reply_markup=game_action_kb(gid, current, game['bets'][current]))
+            send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+            bot.send_message(gid, f"🔫 {current_name}, твой ход!",
+                             reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Ты выбыл")
         else:
             idx = game["players"].index(pid)
@@ -1830,12 +1825,12 @@ def handle_callback(call):
             current = game["current_player"]
             total_pot = sum(game["bets"].values())
             current_name = get_name(current)
-            bot.edit_message_text(f"🍀 {player_name} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_name}", gid, game["message_id"])
+            bot.edit_message_text(f"🍀 {player_name} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
             
-            # Сообщение в чат о выживании и следующем ходе
-            send_chat_message(gid, f"🍀 {player_name} ВЫЖИЛ! Следующий ход: {current_name}", 5)
-            
-            bot.send_message(current, f"🔫 ТВОЙ ХОД!\nСтавка: {game['bets'][current]} GC", reply_markup=game_action_kb(gid, current, game['bets'][current]))
+            # Сообщение в чат о следующем ходе
+            send_chat_message(gid, f"🔫 ХОД: {current_name}\nСтавка: {game['bets'][current]} GC\nВыбери действие:", 10)
+            bot.send_message(gid, f"🔫 {current_name}, твой ход!",
+                             reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Пусто! Ты выжил")
         return
 
@@ -2014,5 +2009,5 @@ if __name__ == "__main__":
     print("✅ Бот запущен!")
     print(f"📱 Username: @{BOT_USERNAME}")
     print(f"👑 Admin ID: {ADMIN_ID}")
-    print("💳 Донат через карту: 10₽ = 350 GC")
+    print("💳 Донат: 10₽ = 350 GC")
     bot.infinity_polling()
