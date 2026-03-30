@@ -14,6 +14,18 @@ MAX_PLAYERS_LIMIT = 15
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
+# ========== КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ ==========
+game_cooldowns = {}  # user_id -> время последнего действия
+
+def check_game_cooldown(user_id):
+    """Проверяет КД для игровых действий (5 секунд)"""
+    now = time.time()
+    if user_id in game_cooldowns:
+        if now - game_cooldowns[user_id] < 5:
+            return False
+    game_cooldowns[user_id] = now
+    return True
+
 # ========== БД ==========
 def init_db():
     conn = sqlite3.connect("roulette.db")
@@ -118,7 +130,6 @@ def init_db():
                   details TEXT,
                   timestamp TEXT)''')
     
-    # Создаём сезон если нет
     c.execute("SELECT * FROM seasons WHERE is_active = 1")
     if not c.fetchone():
         now = datetime.now()
@@ -126,7 +137,6 @@ def init_db():
         c.execute("INSERT INTO seasons (number, start_date, end_date) VALUES (1, ?, ?)",
                   (now.isoformat(), end.isoformat()))
     
-    # Заполняем настройки рангов по умолчанию
     c.execute("SELECT COUNT(*) FROM rank_settings")
     if c.fetchone()[0] == 0:
         default_ranks = [
@@ -289,7 +299,6 @@ def update_rating_and_rewards(user_id, won):
     new_rating = max(0, old_rating + change)
     update_user(user_id, rating=new_rating)
     
-    # Проверяем достижение нового ранга
     old_rank = get_rank_name(old_rating)
     new_rank = get_rank_name(new_rating)
     
@@ -528,6 +537,16 @@ def send_chat_message(chat_id, text, delete_after=0):
     except:
         return None
 
+def delete_message_later(chat_id, message_id, delay=5):
+    """Удаляет сообщение через delay секунд"""
+    def delete():
+        time.sleep(delay)
+        try:
+            bot.delete_message(chat_id, message_id)
+        except:
+            pass
+    threading.Thread(target=delete, daemon=True).start()
+
 # ========== ПРОМОКОДЫ ==========
 def create_promo(code, reward_type, reward_amount, max_uses, expires_days=None):
     conn = sqlite3.connect("roulette.db")
@@ -603,11 +622,9 @@ def delete_promo(code):
 
 # ========== СЕЗОННЫЕ НАГРАДЫ ==========
 def give_season_rewards():
-    """Выдаёт награды за сезон и начинает новый"""
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
     
-    # Получаем текущий сезон
     c.execute("SELECT id, number FROM seasons WHERE is_active = 1")
     season = c.fetchone()
     if not season:
@@ -616,7 +633,6 @@ def give_season_rewards():
     
     season_id, season_num = season
     
-    # 1. Награды игрокам по ELO
     c.execute("SELECT user_id, rating FROM users WHERE banned = 0")
     users = c.fetchall()
     
@@ -654,7 +670,6 @@ def give_season_rewards():
         except:
             pass
     
-    # 2. Награды чатам
     c.execute("SELECT chat_id, total_games, total_bets FROM chat_stats ORDER BY (total_games * 10 + total_bets / 10) DESC")
     chats = c.fetchall()
     
@@ -695,7 +710,6 @@ def give_season_rewards():
         
         chat_rewards[chat_id] = {"reward": reward, "reward_owner": reward_owner, "shield": shield, "place": idx}
     
-    # Выдаём награды игрокам чатов
     c.execute("SELECT chat_id, user_id, season_games FROM chat_players WHERE season_games > 0")
     players = c.fetchall()
     
@@ -724,7 +738,6 @@ def give_season_rewards():
             except:
                 pass
     
-    # Выдаём награды создателям чатов
     for chat_id, reward in chat_rewards.items():
         settings = get_chat_settings(chat_id)
         owner_id = settings["owner_id"]
@@ -753,13 +766,9 @@ def give_season_rewards():
                 vip_until = datetime.now() + timedelta(days=3)
                 update_user(owner_id, vip_level=3, vip_until=vip_until.isoformat())
     
-    # Обнуляем сезонную статистику чатов
     c.execute("UPDATE chat_stats SET season_games = 0, season_bets = 0")
-    
-    # Обнуляем сезонную статистику игроков в чатах
     c.execute("UPDATE chat_players SET season_wins = 0, season_games = 0")
     
-    # Завершаем текущий сезон и создаём новый
     c.execute("UPDATE seasons SET is_active = 0 WHERE is_active = 1")
     now = datetime.now()
     end = now + timedelta(days=30)
@@ -1108,7 +1117,8 @@ def start_auto_kick_timer(chat_id, user_id):
         if chat_id in games and games[chat_id]["status"] == "waiting":
             if user_id in games[chat_id]["players"] and user_id not in games[chat_id]["bets"]:
                 games[chat_id]["players"].remove(user_id)
-                bot.send_message(chat_id, f"⏰ {get_user_link(user_id)} удалён за бездействие")
+                msg = bot.send_message(chat_id, f"⏰ {get_user_link(user_id)} удалён за бездействие")
+                delete_message_later(chat_id, msg.message_id, 5)
                 update_lobby_message(chat_id)
     
     timer = threading.Timer(minutes * 60, kick)
@@ -1209,6 +1219,7 @@ def game_command(message):
     if welcome:
         welcome = welcome.replace("{user}", get_user_link(user_id)).replace("{chat}", get_chat_name(chat_id))
         sent = bot.send_message(chat_id, welcome)
+        delete_message_later(chat_id, sent.message_id, 10)
     else:
         sent = bot.send_message(chat_id, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(user_id)} создал лобби!\nМакс: {settings['max_players']}\nМин ставка: {settings['min_bet']} GC",
             reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{chat_id}")))
@@ -1976,6 +1987,7 @@ def handle_callback(call):
         if welcome:
             welcome = welcome.replace("{user}", get_user_link(user_id)).replace("{chat}", get_chat_name(chat_id))
             sent = bot.send_message(chat_id, welcome)
+            delete_message_later(chat_id, sent.message_id, 10)
         else:
             sent = bot.send_message(chat_id, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(user_id)} создал лобби!\nМакс: {settings['max_players']}\nМин ставка: {settings['min_bet']} GC",
                 reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{chat_id}")))
@@ -2005,7 +2017,8 @@ def handle_callback(call):
         
         games[gid]["players"].append(user_id)
         update_lobby_message(gid)
-        bot.send_message(gid, f"➕ {get_name(user_id)} присоединился!")
+        msg = bot.send_message(gid, f"➕ {get_name(user_id)} присоединился!")
+        delete_message_later(gid, msg.message_id, 5)
         bot.send_message(user_id, "🎮 Сделай ставку:", reply_markup=bet_kb(gid))
         start_auto_kick_timer(gid, user_id)
         bot.answer_callback_query(call.id, "Ты присоединился!")
@@ -2020,7 +2033,8 @@ def handle_callback(call):
             return
         cancel_auto_kick_timers(gid)
         del games[gid]
-        bot.send_message(gid, "❌ Игра отменена")
+        msg = bot.send_message(gid, "❌ Игра отменена")
+        delete_message_later(gid, msg.message_id, 5)
         bot.answer_callback_query(call.id, "Игра отменена")
         return
     
@@ -2048,7 +2062,8 @@ def handle_callback(call):
         
         games[gid]["bets"][user_id] = bet
         update_user(user_id, gc=user["gc"] - bet)
-        bot.send_message(gid, f"💰 {get_name(user_id)} поставил {bet} GC!")
+        msg = bot.send_message(gid, f"💰 {get_name(user_id)} поставил {bet} GC!")
+        delete_message_later(gid, msg.message_id, 5)
         bot.send_message(user_id, f"✅ Ставка {bet} GC принята!")
         cancel_auto_kick_timers(gid)
         update_lobby_message(gid)
@@ -2084,8 +2099,9 @@ def handle_callback(call):
         bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\n{players_text}\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
         
         current = game["current_player"]
-        bot.send_message(gid, f"🔫 ХОД: {get_name(current)}\nСтавка: {game['bets'][current]} GC")
-        bot.send_message(gid, f"🔫 {get_name(current)}, твой ход!", reply_markup=game_action_kb(gid, current, game['bets'][current]))
+        # Отправляем одно сообщение с действием (без лишнего)
+        bot.send_message(gid, f"🔫 ХОД: {get_name(current)} | Ставка: {game['bets'][current]} GC\n\nВыбери действие:", 
+            reply_markup=game_action_kb(gid, current, game['bets'][current]))
         
         update_chat_stats(gid, total_pot)
         for p in players:
@@ -2096,6 +2112,11 @@ def handle_callback(call):
         return
     
     if call.data.startswith("spin_"):
+        # КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ
+        if not check_game_cooldown(user_id):
+            bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
+            return
+        
         parts = call.data.split("_")
         gid = int(parts[1])
         pid = int(parts[2])
@@ -2109,12 +2130,23 @@ def handle_callback(call):
             return
         
         game["chambers"][pid] = random.randint(1, 6)
-        bot.send_message(gid, f"🔄 {get_name(pid)} прокрутил барабан!")
-        bot.send_message(gid, f"🔫 {get_name(pid)}, стреляй!", reply_markup=game_action_kb(gid, pid, bet))
+        # Удаляем старое сообщение с кнопками
+        try:
+            bot.delete_message(gid, call.message.message_id)
+        except:
+            pass
+        # Отправляем новое с обновлёнными кнопками
+        bot.send_message(gid, f"🔄 {get_name(pid)} прокрутил барабан!\n\n🔫 Теперь стреляй:", 
+            reply_markup=game_action_kb(gid, pid, bet))
         bot.answer_callback_query(call.id, "Барабан прокручен!")
         return
     
     if call.data.startswith("shoot_"):
+        # КД ТОЛЬКО ДЛЯ ИГРОВЫХ ДЕЙСТВИЙ
+        if not check_game_cooldown(user_id):
+            bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
+            return
+        
         parts = call.data.split("_")
         gid = int(parts[1])
         pid = int(parts[2])
@@ -2126,6 +2158,12 @@ def handle_callback(call):
         if game["current_player"] != pid:
             bot.answer_callback_query(call.id, "❌ Не ваш ход!", show_alert=True)
             return
+        
+        # Удаляем сообщение с кнопками
+        try:
+            bot.delete_message(gid, call.message.message_id)
+        except:
+            pass
         
         chamber = game["chambers"][pid]
         trigger = random.randint(1, 6)
@@ -2163,7 +2201,8 @@ def handle_callback(call):
             update_user(pid, losses=u["losses"] + 1, gc=u["gc"] + refund)
             update_rating_and_rewards(pid, False)
             update_chat_player(gid, pid, False)
-            bot.send_message(gid, f"💀 {get_name(pid)} ВЫБЫЛ!")
+            msg = bot.send_message(gid, f"💀 {get_name(pid)} ВЫБЫЛ!")
+            delete_message_later(gid, msg.message_id, 5)
             
             if len(game["players"]) == 1:
                 winner_id = game["players"][0]
@@ -2174,13 +2213,15 @@ def handle_callback(call):
                 settings = get_chat_settings(gid)
                 if settings["winner_bonus"] > 0:
                     win_amount += settings["winner_bonus"]
-                    bot.send_message(gid, f"🎁 Бонус чата: +{settings['winner_bonus']} GC!")
+                    bonus_msg = bot.send_message(gid, f"🎁 Бонус чата: +{settings['winner_bonus']} GC!")
+                    delete_message_later(gid, bonus_msg.message_id, 5)
                 update_user(winner_id, gc=winner["gc"] + win_amount, wins=winner["wins"] + 1)
                 update_rating_and_rewards(winner_id, True)
                 add_gc(winner_id, 5)
                 update_chat_player(gid, winner_id, True)
                 bot.edit_message_text(f"💀 {get_name(pid)} ВЫБЫЛ!\n\n🏆 ПОБЕДИТЕЛЬ: {get_name(winner_id)}\n💰 Выигрыш: {win_amount} GC", gid, game["message_id"])
-                bot.send_message(gid, f"🏆 {get_name(winner_id)} ПОБЕДИЛ! +{win_amount} GC")
+                win_msg = bot.send_message(gid, f"🏆 {get_name(winner_id)} ПОБЕДИЛ! +{win_amount} GC")
+                delete_message_later(gid, win_msg.message_id, 10)
                 del games[gid]
                 bot.answer_callback_query(call.id, "Ты выбыл")
                 return
@@ -2189,8 +2230,9 @@ def handle_callback(call):
             current = game["current_player"]
             total_pot = sum(game["bets"].values())
             bot.edit_message_text(f"💀 {get_name(pid)} ВЫБЫЛ!\n\nОстались: {', '.join([get_name(p) for p in game['players']])}\n💰 Банк: {total_pot} GC", gid, game["message_id"])
-            bot.send_message(gid, f"🔫 ХОД: {get_name(current)}\nСтавка: {game['bets'][current]} GC")
-            bot.send_message(gid, f"🔫 {get_name(current)}, твой ход!", reply_markup=game_action_kb(gid, current, game['bets'][current]))
+            # Отправляем одно сообщение с действием
+            bot.send_message(gid, f"🔫 ХОД: {get_name(current)} | Ставка: {game['bets'][current]} GC\n\nВыбери действие:", 
+                reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Ты выбыл")
         else:
             idx = game["players"].index(pid)
@@ -2199,12 +2241,13 @@ def handle_callback(call):
             current = game["current_player"]
             total_pot = sum(game["bets"].values())
             bot.edit_message_text(f"🍀 {get_name(pid)} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC", gid, game["message_id"])
-            bot.send_message(gid, f"🔫 ХОД: {get_name(current)}\nСтавка: {game['bets'][current]} GC")
-            bot.send_message(gid, f"🔫 {get_name(current)}, твой ход!", reply_markup=game_action_kb(gid, current, game['bets'][current]))
+            # Отправляем одно сообщение с действием
+            bot.send_message(gid, f"🔫 ХОД: {get_name(current)} | Ставка: {game['bets'][current]} GC\n\nВыбери действие:", 
+                reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Пусто! Ты выжил")
         return
 
-# ========== ОБРАБОТЧИКИ ==========
+# ========== ОБРАБОТЧИКИ НАСТРОЕК ==========
 def promo_enter_handler(message, original_chat_id, original_message_id):
     success, msg = use_promo(message.from_user.id, message.text.upper())
     bot.send_message(message.chat.id, msg)
