@@ -46,7 +46,6 @@ def init_db():
                   owner_id INTEGER DEFAULT 0,
                   name TEXT DEFAULT '',
                   bet_buttons TEXT DEFAULT '10,50,100,200,500,1000',
-                  subscribed INTEGER DEFAULT 0,
                   banned INTEGER DEFAULT 0)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS chat_stats
@@ -143,18 +142,17 @@ def remove_gc(user_id, amount):
 def get_chat_settings(chat_id):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT max_players, min_bet, max_bet, game_enabled, admin_only, owner_id, name, bet_buttons, subscribed, banned FROM chat_settings WHERE chat_id = ?", (chat_id,))
+    c.execute("SELECT max_players, min_bet, max_bet, game_enabled, admin_only, owner_id, name, bet_buttons, banned FROM chat_settings WHERE chat_id = ?", (chat_id,))
     settings = c.fetchone()
     if not settings:
         c.execute("INSERT INTO chat_settings (chat_id) VALUES (?)", (chat_id,))
         conn.commit()
-        settings = (6, 10, 500, 1, 0, 0, "", "10,50,100,200,500,1000", 0, 0)
+        settings = (6, 10, 500, 1, 0, 0, "", "10,50,100,200,500,1000", 0)
     conn.close()
     return {
         "max_players": settings[0], "min_bet": settings[1], "max_bet": settings[2],
         "game_enabled": settings[3], "admin_only": settings[4], "owner_id": settings[5],
-        "name": settings[6], "bet_buttons": settings[7], "subscribed": settings[8],
-        "banned": settings[9]
+        "name": settings[6], "bet_buttons": settings[7], "banned": settings[8]
     }
 
 def update_chat_settings(chat_id, **kwargs):
@@ -168,7 +166,7 @@ def update_chat_settings(chat_id, **kwargs):
 def get_all_chats():
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT chat_id, name, owner_id, game_enabled, subscribed FROM chat_settings WHERE name != ''")
+    c.execute("SELECT chat_id, name, owner_id, game_enabled FROM chat_settings WHERE name != ''")
     chats = c.fetchall()
     conn.close()
     return chats
@@ -431,20 +429,6 @@ def send_chat_message(chat_id, text, delete_after=0):
     except:
         return None
 
-def notify_subscribed_chats(text):
-    """Отправляет уведомление во все подписанные чаты"""
-    conn = sqlite3.connect("roulette.db")
-    c = conn.cursor()
-    c.execute("SELECT chat_id FROM chat_settings WHERE subscribed = 1 AND banned = 0")
-    chats = c.fetchall()
-    conn.close()
-    
-    for (chat_id,) in chats:
-        try:
-            bot.send_message(chat_id, text, parse_mode="HTML")
-        except:
-            pass
-
 # ========== ТЕКСТЫ ==========
 def get_story():
     return (
@@ -554,7 +538,7 @@ def private_main_menu(user_id):
     
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT chat_id, name, subscribed FROM chat_settings WHERE owner_id = ?", (user_id,))
+    c.execute("SELECT chat_id, name FROM chat_settings WHERE owner_id = ?", (user_id,))
     chats = c.fetchall()
     conn.close()
     
@@ -643,14 +627,14 @@ def admin_promocodes_kb():
 def my_chats_kb(user_id):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT chat_id, name, subscribed FROM chat_settings WHERE owner_id = ?", (user_id,))
+    c.execute("SELECT chat_id, name FROM chat_settings WHERE owner_id = ?", (user_id,))
     chats = c.fetchall()
     conn.close()
     
     kb = InlineKeyboardMarkup(row_width=1)
-    for chat_id_db, name, subscribed in chats:
-        status_emoji = "🔔" if subscribed else "🔕"
-        kb.add(InlineKeyboardButton(f"{status_emoji} {name or chat_id_db}", callback_data=f"chat_settings_{chat_id_db}"))
+    for chat_id_db, name in chats:
+        chat_display = name or get_chat_name(chat_id_db)
+        kb.add(InlineKeyboardButton(f"⚙️ {chat_display}", callback_data=f"chat_settings_{chat_id_db}"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
@@ -658,9 +642,8 @@ def chat_settings_kb(chat_id):
     settings = get_chat_settings(chat_id)
     kb = InlineKeyboardMarkup(row_width=1)
     
-    # Информация о чате
+    # Получаем название чата
     chat_name = settings['name'] or get_chat_name(chat_id)
-    owner_name = get_name(settings['owner_id']) if settings['owner_id'] else "Не назначен"
     
     # Статистика чата
     conn = sqlite3.connect("roulette.db")
@@ -672,19 +655,23 @@ def chat_settings_kb(chat_id):
     total_games = stats[0] if stats else 0
     total_bets = stats[1] if stats else 0
     
-    # Отображаем информацию
-    info_text = f"📌 <b>{chat_name}</b>\n"
-    info_text += f"👤 Владелец: {owner_name}\n"
-    info_text += f"🎮 Всего игр: {total_games}\n"
-    info_text += f"💰 Всего ставок: {total_bets} GC\n\n"
+    # Формируем информационный текст
+    info_text = (
+        f"📌 <b>{chat_name}</b>\n"
+        f"🆔 ID: <code>{chat_id}</code>\n"
+        f"🎮 Всего игр: <b>{total_games}</b>\n"
+        f"💰 Всего ставок: <b>{total_bets}</b> GC\n\n"
+        f"⚙️ <b>НАСТРОЙКИ ЧАТА:</b>"
+    )
     
-    kb.add(InlineKeyboardButton("🔔 Подписка на новости", callback_data=f"toggle_subscribe_{chat_id}"))
+    # Кнопки настроек
     kb.add(InlineKeyboardButton(f"👥 Макс игроков: {settings['max_players']}", callback_data=f"set_max_players_{chat_id}"))
     kb.add(InlineKeyboardButton(f"💰 Мин ставка: {settings['min_bet']} GC", callback_data=f"set_min_bet_{chat_id}"))
     kb.add(InlineKeyboardButton(f"💎 Макс ставка: {settings['max_bet']} GC", callback_data=f"set_max_bet_{chat_id}"))
     kb.add(InlineKeyboardButton(f"🎮 Кнопки ставок: {settings['bet_buttons']}", callback_data=f"set_bet_buttons_{chat_id}"))
     kb.add(InlineKeyboardButton(f"🎮 Игры: {'✅ Вкл' if settings['game_enabled'] else '❌ Выкл'}", callback_data=f"toggle_game_{chat_id}"))
     kb.add(InlineKeyboardButton(f"👑 Только админы: {'✅ Да' if settings['admin_only'] else '❌ Нет'}", callback_data=f"toggle_admin_only_{chat_id}"))
+    kb.add(InlineKeyboardButton("🔄 Сбросить статистику", callback_data=f"reset_stats_{chat_id}"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="my_chats_settings"))
     
     return kb, info_text
@@ -1285,20 +1272,26 @@ def handle_callback(call):
         bot.answer_callback_query(call.id)
         return
     
-    # ПОДПИСКА НА ЧАТ
-    if call.data.startswith("toggle_subscribe_"):
+    # СБРОС СТАТИСТИКИ ЧАТА
+    if call.data.startswith("reset_stats_"):
         target_chat_id = int(call.data.split("_")[2])
         settings = get_chat_settings(target_chat_id)
-        new_state = 0 if settings['subscribed'] else 1
-        update_chat_settings(target_chat_id, subscribed=new_state)
         
-        if new_state:
-            bot.answer_callback_query(call.id, "✅ Вы подписали чат на новости бота!")
-            bot.send_message(target_chat_id, "🔔 Чат подписан на новости бота! Вы будете получать уведомления о важных событиях.")
-        else:
-            bot.answer_callback_query(call.id, "🔕 Вы отписали чат от новостей бота.")
-            bot.send_message(target_chat_id, "🔕 Чат отписан от новостей бота.")
+        # Проверяем, что пользователь - владелец чата
+        if settings["owner_id"] != user_id and user_id != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец чата может сбросить статистику!", show_alert=True)
+            return
         
+        conn = sqlite3.connect("roulette.db")
+        c = conn.cursor()
+        c.execute("DELETE FROM chat_stats WHERE chat_id = ?", (target_chat_id,))
+        c.execute("INSERT INTO chat_stats (chat_id, total_games, total_bets) VALUES (?, 0, 0)", (target_chat_id,))
+        conn.commit()
+        conn.close()
+        
+        bot.answer_callback_query(call.id, "✅ Статистика чата сброшена!", show_alert=True)
+        
+        # Обновляем сообщение
         kb, info_text = chat_settings_kb(target_chat_id)
         bot.edit_message_text(info_text, chat_id, message_id, reply_markup=kb, parse_mode="HTML")
         return
@@ -1377,10 +1370,10 @@ def handle_callback(call):
             return
         chats = get_all_chats()
         text = "<b>📋 СПИСОК ЧАТОВ</b>\n\n"
-        for cid, name, owner, enabled, subscribed in chats[:30]:
+        for cid, name, owner, enabled in chats[:30]:
             status = "✅" if enabled else "❌"
-            sub = "🔔" if subscribed else "🔕"
-            text += f"{sub} {status} {name or cid}\n   ID: {cid}\n   Владелец: {get_name(owner) if owner else '?'}\n\n"
+            owner_name = get_name(owner) if owner else "?"
+            text += f"{status} {name or cid}\n   ID: {cid}\n   Владелец: {owner_name}\n\n"
         if len(chats) > 30:
             text += f"... и еще {len(chats) - 30} чатов"
         kb = InlineKeyboardMarkup()
@@ -1888,7 +1881,7 @@ def broadcast_handler(message, original_chat_id, original_message_id):
     text = message.text
     chats = get_all_chats()
     success, fail = 0, 0
-    for cid, _, _, _, _ in chats:
+    for cid, _, _, _ in chats:
         try:
             bot.send_message(cid, f"📢 <b>РАССЫЛКА ОТ АДМИНА</b>\n\n{text}")
             success += 1
