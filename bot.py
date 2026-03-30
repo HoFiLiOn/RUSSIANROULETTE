@@ -3,7 +3,7 @@ import sqlite3
 import random
 import time
 from datetime import datetime, timedelta
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, PreCheckoutQuery
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ========== КОНФИГ ==========
 BOT_TOKEN = "8412567351:AAG7eEMXlNfDBsNZF08GD-Pr-LH-2z1txSQ"
@@ -428,7 +428,14 @@ def get_help_text(page):
             "<b>💰 КАК ПОЛУЧИТЬ GC (GunCoin):</b>\n"
             "• /daily — 50 GC (+200 за 7 дней подряд)\n"
             "• Победа в игре — +5 GC\n"
-            "• ⭐ Поддержать — донат через Stars"
+            "• Поддержать проект — /donate\n\n"
+            "<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ:</b>\n"
+            "• 10₽ = 200 GC\n"
+            "• 50₽ = 1,000 GC\n"
+            "• 100₽ = 2,000 GC\n"
+            "• 250₽ = 5,000 GC\n"
+            "• 500₽ = 10,000 GC\n"
+            "• 1000₽ = 20,000 GC"
         )
     elif page == 2:
         return (
@@ -462,7 +469,7 @@ def get_help_text(page):
             "• /shop — магазин\n"
             "• /top — топы\n"
             "• /promo КОД — активировать промокод\n"
-            "• /paysupport — поддержка по оплате\n"
+            "• /donate — поддержать проект\n"
             "• /help — эта помощь\n\n"
             "<b>⚙️ ДЛЯ СОЗДАТЕЛЯ ЧАТА:</b>\n"
             "• Настройки чата — в ЛС с ботом → «Настройки чатов»\n\n"
@@ -482,6 +489,8 @@ def get_welcome_text():
         "<b>💰 БОНУСЫ:</b>\n"
         "• Ежедневный бонус — /daily\n"
         "• Повышай рейтинг — получай награды\n\n"
+        "<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ:</b>\n"
+        "• /donate — реквизиты\n\n"
         "<b>📌 ПОДРОБНЕЕ:</b>\n"
         "• /help — вся информация\n\n"
         "👇 Нажми кнопку, чтобы начать!"
@@ -495,7 +504,7 @@ def private_main_menu(user_id):
     kb.add(InlineKeyboardButton("🛒 Магазин", callback_data="shop_1"))
     kb.add(InlineKeyboardButton("🏆 Топы", callback_data="top_menu"))
     kb.add(InlineKeyboardButton("🎫 Промокод", callback_data="promo_menu"))
-    kb.add(InlineKeyboardButton("⭐ Поддержать", callback_data="donate_menu"))
+    kb.add(InlineKeyboardButton("💳 Поддержать", callback_data="donate_menu"))
     kb.add(InlineKeyboardButton("❓ Помощь", callback_data="help_menu"))
     
     conn = sqlite3.connect("roulette.db")
@@ -512,28 +521,10 @@ def private_main_menu(user_id):
     
     return kb
 
-# ========== ДОНАТ (TELEGRAM STARS) ==========
+# ========== ДОНАТ (КАРТА) ==========
 def donate_menu_kb():
-    kb = InlineKeyboardMarkup(row_width=2)
-    buttons = [
-        ("⭐ 1 Star → 50 GC", "donate_1"),
-        ("⭐ 2 Stars → 100 GC", "donate_2"),
-        ("⭐ 5 Stars → 250 GC", "donate_5"),
-        ("⭐ 10 Stars → 500 GC", "donate_10"),
-        ("⭐ 20 Stars → 1,000 GC", "donate_20"),
-        ("⭐ 50 Stars → 2,500 GC", "donate_50"),
-        ("⭐ 100 Stars → 5,000 GC", "donate_100"),
-        ("⭐ 150 Stars → 7,500 GC", "donate_150"),
-        ("⭐ 200 Stars → 10,000 GC", "donate_200"),
-        ("⭐ 250 Stars → 12,500 GC", "donate_250"),
-        ("⭐ 300 Stars → 15,000 GC", "donate_300"),
-        ("⭐ 400 Stars → 20,000 GC", "donate_400"),
-        ("⭐ 500 Stars → 25,000 GC", "donate_500"),
-        ("⭐ 750 Stars → 37,500 GC", "donate_750"),
-        ("⭐ 1000 Stars → 50,000 GC", "donate_1000")
-    ]
-    for text, callback in buttons:
-        kb.add(InlineKeyboardButton(text, callback_data=callback))
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("💳 Показать реквизиты", callback_data="donate_card"))
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
@@ -867,13 +858,42 @@ def promo_command(message):
     success, msg = use_promo(user_id, args[1].upper())
     bot.reply_to(message, msg)
 
-@bot.message_handler(commands=['paysupport'])
-def pay_support_command(message):
-    bot.send_message(
-        message.chat.id,
-        "Добровольные пожертвования не подразумевают возврат средств.\n"
-        "Если у вас возникли проблемы с оплатой, свяжитесь с @HoFiLiOnclkc"
-    )
+@bot.message_handler(commands=['donate'])
+def donate_command(message):
+    user_id = message.from_user.id
+    chat_id = message.chat.id
+    
+    if message.chat.type != "private":
+        bot.reply_to(message, "❌ Используй /donate в личных сообщениях с ботом!")
+        return
+    
+    user = get_user(user_id)
+    if user["banned"]:
+        bot.reply_to(message, "❌ Вы забанены!")
+        return
+    
+    text = """💳 <b>ПОДДЕРЖАТЬ ПРОЕКТ</b>
+
+Если вам нравится бот и вы хотите помочь его развитию, вы можете поддержать проект!
+
+<b>💳 Карта для поддержки:</b>
+<code>2202 2081 8206 1235</code>
+
+<b>💰 За любую сумму вы получите GC:</b>
+• 10 ₽ → 200 GC
+• 50 ₽ → 1,000 GC
+• 100 ₽ → 2,000 GC
+• 250 ₽ → 5,000 GC
+• 500 ₽ → 10,000 GC
+• 1000 ₽ → 20,000 GC
+
+<b>📌 Как получить GC:</b>
+1. Переведите любую сумму на карту
+2. Напишите @HoFiLiOnclkc с чеком
+3. Получите GC на свой аккаунт
+
+Спасибо за поддержку! ❤️"""
+    bot.send_message(chat_id, text, reply_markup=donate_menu_kb())
 
 @bot.message_handler(commands=['help'])
 def help_command(message):
@@ -890,6 +910,13 @@ def help_command(message):
         return
     
     bot.send_message(chat_id, get_help_text(1), reply_markup=help_menu_kb())
+
+@bot.message_handler(commands=['admin'])
+def admin_command(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "❌ Нет прав")
+        return
+    bot.send_message(message.chat.id, "🔧 АДМИН ПАНЕЛЬ", reply_markup=admin_panel_kb())
 
 # ========== ОБРАБОТЧИК ДОБАВЛЕНИЯ В ЧАТ ==========
 @bot.my_chat_member_handler()
@@ -975,47 +1002,55 @@ def handle_callback(call):
         bot.answer_callback_query(call.id)
         return
     
-    # ДОНАТ
+    # ДОНАТ (КАРТА)
     if call.data == "donate_menu":
-        bot.edit_message_text(
-            "⭐ <b>ПОДДЕРЖКА ПРОЕКТА</b>\n\nВыберите сумму доната:",
-            chat_id, message_id,
-            reply_markup=donate_menu_kb()
-        )
+        text = """💳 <b>ПОДДЕРЖАТЬ ПРОЕКТ</b>
+
+Если вам нравится бот и вы хотите помочь его развитию, вы можете поддержать проект!
+
+<b>💳 Карта для поддержки:</b>
+<code>2202 2081 8206 1235</code>
+
+<b>💰 За любую сумму вы получите GC:</b>
+• 10 ₽ → 200 GC
+• 50 ₽ → 1,000 GC
+• 100 ₽ → 2,000 GC
+• 250 ₽ → 5,000 GC
+• 500 ₽ → 10,000 GC
+• 1000 ₽ → 20,000 GC
+
+<b>📌 Как получить GC:</b>
+1. Переведите любую сумму на карту
+2. Напишите @HoFiLiOnclkc с чеком
+3. Получите GC на свой аккаунт
+
+Спасибо за поддержку! ❤️"""
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=donate_menu_kb())
         bot.answer_callback_query(call.id)
         return
     
-    if call.data.startswith("donate_"):
-        parts = call.data.split("_")
-        if len(parts) < 2:
-            bot.answer_callback_query(call.id, "Ошибка!")
-            return
-        
-        stars = int(parts[1])
-        gc_amount = stars * 50
-        
-        # ВАЖНО: prices — список с одним LabeledPrice
-        prices = [LabeledPrice(label="XTR", amount=stars)]
-        
-        try:
-            bot.send_invoice(
-                call.message.chat.id,
-                title="Поддержка бота",
-                description=f"⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin",
-                payload=f"donate_{stars}_{gc_amount}",
-                provider_token="",           # Обязательно пустая строка
-                currency="XTR",              # Обязательно XTR
-                prices=prices,               # Список с LabeledPrice
-                start_parameter="donate",    # Обязательный параметр
-                need_name=False,
-                need_email=False,
-                need_phone_number=False,
-                need_shipping_address=False
-            )
-            bot.answer_callback_query(call.id, "💰 Счёт создан! Оплатите в появившемся окне.")
-        except Exception as e:
-            bot.answer_callback_query(call.id, f"❌ Ошибка: {str(e)[:50]}", show_alert=True)
-            print(f"Donate error: {e}")
+    if call.data == "donate_card":
+        text = """💳 <b>РЕКВИЗИТЫ ДЛЯ ПОДДЕРЖКИ</b>
+
+<b>Карта:</b>
+<code>2202 2081 8206 1235</code>
+
+<b>После перевода:</b>
+1️⃣ Отправьте скриншот чека @HoFiLiOnclkc
+2️⃣ Укажите свой ID (можно скопировать из /start)
+3️⃣ Получите GC на баланс!
+
+<b>Курс:</b>
+10 ₽ = 200 GC
+50 ₽ = 1,000 GC
+100 ₽ = 2,000 GC
+250 ₽ = 5,000 GC
+500 ₽ = 10,000 GC
+1000 ₽ = 20,000 GC
+
+Спасибо, что поддерживаете проект! ❤️"""
+        bot.edit_message_text(text, chat_id, message_id, reply_markup=donate_menu_kb())
+        bot.answer_callback_query(call.id)
         return
     
     # СТАТА
@@ -1630,7 +1665,10 @@ def handle_callback(call):
         total_pot = sum(game["bets"].values())
         
         players_text = "\n".join([f"• {get_user_link(p)} — {game['bets'][p]} GC" for p in players])
-        bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\nУчастники:\n{players_text}\n\n💰 Банк: {total_pot} GC\n🔫 ХОД: {get_user_link(game['current_player'])}", gid, game["message_id"])
+        
+        # Показываем кто ходит (ник/юзернейм)
+        current_player_name = get_name(game["current_player"])
+        bot.edit_message_text(f"🎲 <b>ИГРА НАЧАЛАСЬ!</b>\n\nУчастники:\n{players_text}\n\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_player_name}", gid, game["message_id"])
         
         conn = sqlite3.connect("roulette.db")
         c = conn.cursor()
@@ -1736,7 +1774,9 @@ def handle_callback(call):
                 update_rating(winner_id, True)
                 add_gc(winner_id, 5)
                 
-                bot.edit_message_text(f"💀 {get_user_link(pid)} ВЫБЫЛ!\n\n🏆 ПОБЕДИТЕЛЬ: {get_user_link(winner_id)}\n💰 Выигрыш: {win_amount} GC", gid, game["message_id"])
+                winner_name = get_name(winner_id)
+                dead_name = get_name(pid)
+                bot.edit_message_text(f"💀 {dead_name} ВЫБЫЛ!\n\n🏆 ПОБЕДИТЕЛЬ: {winner_name}\n💰 Выигрыш: {win_amount} GC", gid, game["message_id"])
                 bot.send_message(winner_id, f"🏆 Ты победил! +{win_amount} GC")
                 del games[gid]
                 bot.answer_callback_query(call.id, "Ты выбыл")
@@ -1745,7 +1785,10 @@ def handle_callback(call):
             game["current_player"] = game["players"][0]
             current = game["current_player"]
             total_pot = sum(game["bets"].values())
-            bot.edit_message_text(f"💀 {get_user_link(pid)} ВЫБЫЛ!\n\nОстались: {', '.join([get_user_link(p) for p in game['players']])}\n💰 Банк: {total_pot} GC\n🔫 ХОД: {get_user_link(current)}", gid, game["message_id"])
+            current_name = get_name(current)
+            dead_name = get_name(pid)
+            remaining_names = ", ".join([get_name(p) for p in game["players"]])
+            bot.edit_message_text(f"💀 {dead_name} ВЫБЫЛ!\n\nОстались: {remaining_names}\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_name}", gid, game["message_id"])
             bot.send_message(current, f"🔫 ТВОЙ ХОД!\nСтавка: {game['bets'][current]} GC", reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Ты выбыл")
         else:
@@ -1754,35 +1797,12 @@ def handle_callback(call):
             game["current_player"] = game["players"][next_idx]
             current = game["current_player"]
             total_pot = sum(game["bets"].values())
-            bot.edit_message_text(f"🍀 {get_user_link(pid)} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC\n🔫 ХОД: {get_user_link(current)}", gid, game["message_id"])
+            current_name = get_name(current)
+            player_name = get_name(pid)
+            bot.edit_message_text(f"🍀 {player_name} ВЫЖИЛ!\n\n💰 Банк: {total_pot} GC\n🔫 ХОДИТ: {current_name}", gid, game["message_id"])
             bot.send_message(current, f"🔫 ТВОЙ ХОД!\nСтавка: {game['bets'][current]} GC", reply_markup=game_action_kb(gid, current, game['bets'][current]))
             bot.answer_callback_query(call.id, "Пусто! Ты выжил")
         return
-
-# ========== ПЛАТЕЖИ (DONATE) ==========
-@bot.pre_checkout_query_handler(func=lambda query: True)
-def handle_pre_checkout(pre_checkout_query: PreCheckoutQuery):
-    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-@bot.message_handler(content_types=['successful_payment'])
-def handle_successful_payment(message):
-    payload = message.successful_payment.invoice_payload
-    parts = payload.split("_")
-    stars = int(parts[1])
-    gc_amount = int(parts[2])
-    
-    user_id = message.from_user.id
-    user = get_user(user_id)
-    new_gc = user["gc"] + gc_amount
-    update_user(user_id, gc=new_gc)
-    
-    bot.send_message(
-        user_id,
-        f"✅ Спасибо за поддержку!\n\n⭐ {stars} Stars\n🏆 +{gc_amount} GunCoin\n\n💰 Новый баланс: {new_gc} GC",
-        reply_markup=private_main_menu(user_id)
-    )
-    
-    log_admin(user_id, "donate", str(user_id), f"{stars} stars -> {gc_amount} gc")
 
 # ========== ОБРАБОТЧИКИ ==========
 def promo_enter_handler(message, original_chat_id, original_message_id):
@@ -1959,5 +1979,5 @@ if __name__ == "__main__":
     print("✅ Бот запущен!")
     print(f"📱 Username: @{BOT_USERNAME}")
     print(f"👑 Admin ID: {ADMIN_ID}")
-    print("⭐ Donate через Stars включен")
+    print("💳 Донат через карту: 2202 2081 8206 1235")
     bot.infinity_polling()
