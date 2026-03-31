@@ -1095,40 +1095,53 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Игра начата!"); return
     
     if call.data.startswith("spin_"):
+        # Проверка КД
         if not check_game_cooldown(uid): 
             bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
             return
+        
         parts = call.data.split("_")
         gid = int(parts[1]); pid = int(parts[2]); bet = int(parts[3])
+        
         if gid not in games or games[gid]["status"] != "playing": 
             bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
             return
+        
         g = games[gid]
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
         if g["current_player"] != pid: 
             bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
             return
         
-        # НЕ УДАЛЯЕМ сообщение, а редактируем его
+        # Редактируем сообщение, добавляя РП-описание
         story = random.choice(SPIN_STORIES).replace("{name}", get_name(pid))
         new_text = f"🔄 {get_name(pid)} крутит барабан.\n\n{story}\n\n🔫 {get_name(pid)}, твой ход! | Ставка: {bet} GC"
         try:
             bot.edit_message_text(new_text, gid, call.message.message_id, reply_markup=game_action_kb(gid, pid, bet), parse_mode="HTML")
         except:
             pass
+        
         g["chambers"][pid] = random.randint(1, 6)
         bot.answer_callback_query(call.id, "Барабан прокручен!")
         return
     
     if call.data.startswith("shoot_"):
+        # Проверка КД
         if not check_game_cooldown(uid): 
             bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
             return
+        
         parts = call.data.split("_")
         gid = int(parts[1]); pid = int(parts[2]); bet = int(parts[3])
+        
         if gid not in games or games[gid]["status"] != "playing": 
             bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
             return
+        
         g = games[gid]
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
         if g["current_player"] != pid: 
             bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
             return
@@ -1136,6 +1149,7 @@ def handle_callback(call):
         chamber = g["chambers"][pid]
         trigger = random.randint(1, 6)
         u2 = get_user(pid)
+        
         if u2["master"]: 
             trigger = random.randint(1, 5)
             bot.send_message(pid, "🎯 МАСТЕР!")
@@ -1144,6 +1158,7 @@ def handle_callback(call):
             g["used_double"][pid] = 1
             update_user(pid, double_chance=u2["double_chance"]-1)
             bot.send_message(pid, "⚡ ДВОЙНОЙ ШАНС!")
+        
         is_dead = (trigger == chamber)
         if is_dead and g["mode"] == "arcade":
             if u2["shields"] > 0 and g["used_shields"].get(pid,0) == 0:
@@ -1156,7 +1171,6 @@ def handle_callback(call):
                 update_user(pid, diamond_shield=u2["diamond_shield"]-1)
                 bot.send_message(pid, "💎 АЛМАЗНЫЙ ЩИТ!")
         
-        # Отправляем результат в то же сообщение
         if is_dead:
             refund = 0
             if u2["insurance"] > 0 and g["used_insurance"].get(pid,0) == 0 and g["mode"] == "arcade":
@@ -1164,6 +1178,7 @@ def handle_callback(call):
                 g["used_insurance"][pid] = 1
                 update_user(pid, insurance=u2["insurance"]-1)
                 bot.send_message(pid, f"💰 СТРАХОВКА! +{refund} GC")
+            
             g["lives"][pid] -= 1
             if g["lives"][pid] > 0:
                 story = random.choice(MISS_STORIES).replace("{name}", get_name(pid))
@@ -1172,7 +1187,6 @@ def handle_callback(call):
                     bot.edit_message_text(result_text, gid, call.message.message_id, parse_mode="HTML")
                 except:
                     pass
-                # Удаляем это сообщение через 7 секунд
                 delete_message_later(gid, call.message.message_id, 7)
                 next_turn_with_delay(gid, g, 4)
                 bot.answer_callback_query(call.id, "Ты потерял жизнь!")
@@ -1184,7 +1198,6 @@ def handle_callback(call):
                     bot.edit_message_text(result_text, gid, call.message.message_id, parse_mode="HTML")
                 except:
                     pass
-                # Удаляем это сообщение через 7 секунд
                 delete_message_later(gid, call.message.message_id, 7)
                 g["players"].remove(pid)
                 update_user(pid, losses=u2["losses"]+1, gc=u2["gc"]+refund)
@@ -1230,7 +1243,6 @@ def handle_callback(call):
                 bot.edit_message_text(result_text, gid, call.message.message_id, parse_mode="HTML")
             except:
                 pass
-            # Удаляем это сообщение через 7 секунд
             delete_message_later(gid, call.message.message_id, 7)
             idx = g["players"].index(pid)
             next_idx = (idx + 1) % len(g["players"])
