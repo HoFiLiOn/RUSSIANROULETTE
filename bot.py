@@ -990,7 +990,7 @@ def handle_callback(call):
         s = get_chat_settings(cid)
         if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
         msg = bot.send_message(cid, MODE_STORIES["arcade"].replace("{name}", get_name(uid)))
-        delete_message_later(cid, msg.message_id, 3)
+        delete_message_later(cid, msg.message_id, 6)
         sent = bot.send_message(cid, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
         games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"arcade","lives":{uid:3}}
         bot.send_message(uid, "✅ Сделай ставку:", reply_markup=bet_kb(cid))
@@ -999,7 +999,6 @@ def handle_callback(call):
         return
     
     if call.data == "mode_hardcore":
-        # Показываем описание хардкора и кнопки подтверждения
         bot.edit_message_text(HARDCORE_DESCRIPTION, cid, mid, reply_markup=hardcore_confirm_kb())
         bot.answer_callback_query(call.id)
         return
@@ -1036,7 +1035,7 @@ def handle_callback(call):
         games[gid]["players"].append(uid)
         games[gid]["lives"][uid] = 3 if games[gid]["mode"] == "arcade" else 1
         update_lobby_message(gid)
-        msg = bot.send_message(gid, f"➕ {get_name(uid)} присоединился!"); delete_message_later(gid, msg.message_id, 5)
+        msg = bot.send_message(gid, f"➕ {get_name(uid)} присоединился!"); delete_message_later(gid, msg.message_id, 6)
         bot.send_message(uid, "🎮 Сделай ставку:", reply_markup=bet_kb(gid))
         start_auto_kick_timer(gid, uid)
         bot.answer_callback_query(call.id, "Ты присоединился!"); return
@@ -1047,7 +1046,7 @@ def handle_callback(call):
         if games[gid]["creator"] != uid and not is_chat_admin(uid, gid): bot.answer_callback_query(call.id, "Только создатель!", show_alert=True); return
         cancel_auto_kick_timers(gid)
         del games[gid]
-        msg = bot.send_message(gid, "❌ Игра отменена"); delete_message_later(gid, msg.message_id, 5)
+        msg = bot.send_message(gid, "❌ Игра отменена"); delete_message_later(gid, msg.message_id, 6)
         bot.answer_callback_query(call.id, "Игра отменена"); return
     
     if call.data.startswith("place_bet_"):
@@ -1061,7 +1060,7 @@ def handle_callback(call):
         if u["gc"] < bet: bot.answer_callback_query(call.id, f"Не хватает! Нужно {bet}", show_alert=True); return
         games[gid]["bets"][uid] = bet
         update_user(uid, gc=u["gc"]-bet)
-        msg = bot.send_message(gid, f"💰 {get_name(uid)} поставил {bet} GC!"); delete_message_later(gid, msg.message_id, 5)
+        msg = bot.send_message(gid, f"💰 {get_name(uid)} поставил {bet} GC!"); delete_message_later(gid, msg.message_id, 6)
         bot.send_message(uid, f"✅ Ставка {bet} GC принята!")
         cancel_auto_kick_timers(gid)
         update_lobby_message(gid)
@@ -1099,10 +1098,10 @@ def handle_callback(call):
         if gid not in games or games[gid]["status"] != "playing": bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True); return
         g = games[gid]
         if g["current_player"] != pid: bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True); return
-        g["chambers"][pid] = random.randint(1, 6)
         try: bot.delete_message(gid, call.message.message_id)
         except: pass
         msg = bot.send_message(gid, f"🔄 {get_name(pid)} крутит барабан.\n\n{random.choice(SPIN_STORIES).replace('{name}', get_name(pid))}", reply_markup=game_action_kb(gid, pid, bet))
+        delete_message_later(gid, msg.message_id, 7)
         g["action_message_id"] = msg.message_id
         bot.answer_callback_query(call.id, "Барабан прокручен!"); return
     
@@ -1135,12 +1134,14 @@ def handle_callback(call):
             if g["lives"][pid] > 0:
                 story = random.choice(MISS_STORIES).replace("{name}", get_name(pid))
                 msg = bot.send_message(gid, f"💔 {get_name(pid)} нажал на курок...\n\n{story}\n\n❤️ Осталось жизней: {g['lives'][pid]}\n💰 Банк: {sum(g['bets'].values())} GC")
+                delete_message_later(gid, msg.message_id, 7)
                 edit_with_delay(gid, msg.message_id, f"💔 {get_name(pid)} нажал на курок...\n\n{story}\n\n❤️ Осталось жизней: {g['lives'][pid]}\n💰 Банк: {sum(g['bets'].values())} GC\n\n🍀 {get_name(pid)} ВЫЖИЛ!", 2)
                 next_turn_with_delay(gid, g, 4)
                 bot.answer_callback_query(call.id, "Ты потерял жизнь!"); return
             else:
                 story = random.choice(DEATH_STORIES).replace("{name}", get_name(pid))
                 msg = bot.send_message(gid, f"💀 {get_name(pid)} нажал на курок...\n\n{story}")
+                delete_message_later(gid, msg.message_id, 7)
                 edit_with_delay(gid, msg.message_id, f"💀 {get_name(pid)} нажал на курок...\n\n{story}\n\n💀 {get_name(pid)} ВЫБЫЛ!", 2)
                 g["players"].remove(pid)
                 update_user(pid, losses=u2["losses"]+1, gc=u2["gc"]+refund)
@@ -1148,7 +1149,7 @@ def handle_callback(call):
                 update_chat_player(gid, pid, False)
                 if g["mode"] == "hardcore":
                     ban_msg = bot.send_message(gid, HARDCORE_BAN_MESSAGE.replace("{name}", get_name(pid)))
-                    delete_message_later(gid, ban_msg.message_id, 5)
+                    delete_message_later(gid, ban_msg.message_id, 7)
                     if ban_user_from_chat(gid, pid):
                         bot.send_message(gid, f"🚫 {get_name(pid)} навсегда изгнан из этого чата!")
                     else:
@@ -1180,6 +1181,7 @@ def handle_callback(call):
         else:
             story = random.choice(MISS_STORIES).replace("{name}", get_name(pid))
             msg = bot.send_message(gid, f"🍀 {get_name(pid)} нажал на курок...\n\n{story}")
+            delete_message_later(gid, msg.message_id, 7)
             edit_with_delay(gid, msg.message_id, f"🍀 {get_name(pid)} нажал на курок...\n\n{story}\n\n🍀 {get_name(pid)} ВЫЖИЛ!\n💰 Банк: {sum(g['bets'].values())} GC", 2)
             idx = g["players"].index(pid)
             next_idx = (idx + 1) % len(g["players"])
