@@ -1092,44 +1092,97 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Игра начата!"); return
     
     if call.data.startswith("spin_"):
-        if not check_game_cooldown(uid): bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True); return
+        # ПРОВЕРКА КД
+        if not check_game_cooldown(uid): 
+            bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
+            return
+        
         parts = call.data.split("_")
         gid = int(parts[1]); pid = int(parts[2]); bet = int(parts[3])
-        if gid not in games or games[gid]["status"] != "playing": bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True); return
+        
+        if gid not in games or games[gid]["status"] != "playing": 
+            bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
+            return
+        
         g = games[gid]
-        if g["current_player"] != pid: bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True); return
-        try: bot.delete_message(gid, call.message.message_id)
-        except: pass
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
+        if g["current_player"] != pid: 
+            bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
+            return
+        
+        # УДАЛЯЕМ СООБЩЕНИЕ С КНОПКАМИ
+        try:
+            bot.delete_message(gid, call.message.message_id)
+        except:
+            pass
+        
+        g["chambers"][pid] = random.randint(1, 6)
         msg = bot.send_message(gid, f"🔄 {get_name(pid)} крутит барабан.\n\n{random.choice(SPIN_STORIES).replace('{name}', get_name(pid))}", reply_markup=game_action_kb(gid, pid, bet))
-        delete_message_later(gid, msg.message_id, 7)
         g["action_message_id"] = msg.message_id
-        bot.answer_callback_query(call.id, "Барабан прокручен!"); return
+        delete_message_later(gid, msg.message_id, 7)
+        bot.answer_callback_query(call.id, "Барабан прокручен!")
+        return
     
     if call.data.startswith("shoot_"):
-        if not check_game_cooldown(uid): bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True); return
+        # ПРОВЕРКА КД
+        if not check_game_cooldown(uid): 
+            bot.answer_callback_query(call.id, "⏰ Подожди 5 секунд!", show_alert=True)
+            return
+        
         parts = call.data.split("_")
         gid = int(parts[1]); pid = int(parts[2]); bet = int(parts[3])
-        if gid not in games or games[gid]["status"] != "playing": bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True); return
+        
+        if gid not in games or games[gid]["status"] != "playing": 
+            bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
+            return
+        
         g = games[gid]
-        if g["current_player"] != pid: bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True); return
-        try: bot.delete_message(gid, call.message.message_id)
-        except: pass
+        
+        # ПРОВЕРКА: только текущий игрок может нажимать
+        if g["current_player"] != pid: 
+            bot.answer_callback_query(call.id, "❌ Сейчас не ваш ход!", show_alert=True)
+            return
+        
+        # УДАЛЯЕМ СООБЩЕНИЕ С КНОПКАМИ
+        try:
+            bot.delete_message(gid, call.message.message_id)
+        except:
+            pass
+        
         chamber = g["chambers"][pid]
         trigger = random.randint(1, 6)
         u2 = get_user(pid)
-        if u2["master"]: trigger = random.randint(1, 5); bot.send_message(pid, "🎯 МАСТЕР!")
+        
+        if u2["master"]: 
+            trigger = random.randint(1, 5)
+            bot.send_message(pid, "🎯 МАСТЕР!")
         if u2["double_chance"] > 0 and g["used_double"].get(pid,0) == 0 and g["mode"] == "arcade":
-            trigger = random.randint(1, 5); g["used_double"][pid] = 1; update_user(pid, double_chance=u2["double_chance"]-1); bot.send_message(pid, "⚡ ДВОЙНОЙ ШАНС!")
+            trigger = random.randint(1, 5)
+            g["used_double"][pid] = 1
+            update_user(pid, double_chance=u2["double_chance"]-1)
+            bot.send_message(pid, "⚡ ДВОЙНОЙ ШАНС!")
+        
         is_dead = (trigger == chamber)
         if is_dead and g["mode"] == "arcade":
             if u2["shields"] > 0 and g["used_shields"].get(pid,0) == 0:
-                is_dead = False; g["used_shields"][pid] = 1; update_user(pid, shields=u2["shields"]-1); bot.send_message(pid, "🛡️ ЩИТ!")
+                is_dead = False
+                g["used_shields"][pid] = 1
+                update_user(pid, shields=u2["shields"]-1)
+                bot.send_message(pid, "🛡️ ЩИТ!")
             if is_dead and u2["diamond_shield"] > 0:
-                is_dead = False; update_user(pid, diamond_shield=u2["diamond_shield"]-1); bot.send_message(pid, "💎 АЛМАЗНЫЙ ЩИТ!")
+                is_dead = False
+                update_user(pid, diamond_shield=u2["diamond_shield"]-1)
+                bot.send_message(pid, "💎 АЛМАЗНЫЙ ЩИТ!")
+        
         if is_dead:
             refund = 0
             if u2["insurance"] > 0 and g["used_insurance"].get(pid,0) == 0 and g["mode"] == "arcade":
-                refund = bet // 2; g["used_insurance"][pid] = 1; update_user(pid, insurance=u2["insurance"]-1); bot.send_message(pid, f"💰 СТРАХОВКА! +{refund} GC")
+                refund = bet // 2
+                g["used_insurance"][pid] = 1
+                update_user(pid, insurance=u2["insurance"]-1)
+                bot.send_message(pid, f"💰 СТРАХОВКА! +{refund} GC")
+            
             g["lives"][pid] -= 1
             if g["lives"][pid] > 0:
                 story = random.choice(MISS_STORIES).replace("{name}", get_name(pid))
@@ -1137,7 +1190,8 @@ def handle_callback(call):
                 delete_message_later(gid, msg.message_id, 7)
                 edit_with_delay(gid, msg.message_id, f"💔 {get_name(pid)} нажал на курок...\n\n{story}\n\n❤️ Осталось жизней: {g['lives'][pid]}\n💰 Банк: {sum(g['bets'].values())} GC\n\n🍀 {get_name(pid)} ВЫЖИЛ!", 2)
                 next_turn_with_delay(gid, g, 4)
-                bot.answer_callback_query(call.id, "Ты потерял жизнь!"); return
+                bot.answer_callback_query(call.id, "Ты потерял жизнь!")
+                return
             else:
                 story = random.choice(DEATH_STORIES).replace("{name}", get_name(pid))
                 msg = bot.send_message(gid, f"💀 {get_name(pid)} нажал на курок...\n\n{story}")
@@ -1147,6 +1201,7 @@ def handle_callback(call):
                 update_user(pid, losses=u2["losses"]+1, gc=u2["gc"]+refund)
                 update_rating_and_rewards(pid, False)
                 update_chat_player(gid, pid, False)
+                
                 if g["mode"] == "hardcore":
                     ban_msg = bot.send_message(gid, HARDCORE_BAN_MESSAGE.replace("{name}", get_name(pid)))
                     delete_message_later(gid, ban_msg.message_id, 7)
@@ -1154,6 +1209,7 @@ def handle_callback(call):
                         bot.send_message(gid, f"🚫 {get_name(pid)} навсегда изгнан из этого чата!")
                     else:
                         bot.send_message(gid, f"⚠️ Не удалось забанить {get_name(pid)}. Бот должен быть администратором!")
+                
                 if len(g["players"]) == 1:
                     winner = g["players"][0]
                     total = sum(g["bets"].values())
@@ -1169,7 +1225,9 @@ def handle_callback(call):
                     win_story = random.choice(WIN_STORIES).replace("{name}", get_name(winner)).replace("{win}", str(win_amt))
                     bot.edit_message_text(f"💀 {get_name(pid)} ВЫБЫЛ!\n\n🏆 ПОБЕДИТЕЛЬ: {get_name(winner)}\n💰 Выигрыш: {win_amt} GC\n\n{win_story}", gid, g["message_id"])
                     del games[gid]
-                    bot.answer_callback_query(call.id, "Ты выбыл"); return
+                    bot.answer_callback_query(call.id, "Ты выбыл")
+                    return
+                
                 g["current_player"] = g["players"][0]
                 cur = g["current_player"]
                 total = sum(g["bets"].values())
@@ -1177,7 +1235,8 @@ def handle_callback(call):
                 bot.edit_message_text(f"💀 {get_name(pid)} ВЫБЫЛ!\n\nОстались: {plist}\n💰 Банк: {total} GC", gid, g["message_id"])
                 msg2 = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid, cur, g['bets'][cur]))
                 g["action_message_id"] = msg2.message_id
-                bot.answer_callback_query(call.id, "Ты выбыл"); return
+                bot.answer_callback_query(call.id, "Ты выбыл")
+                return
         else:
             story = random.choice(MISS_STORIES).replace("{name}", get_name(pid))
             msg = bot.send_message(gid, f"🍀 {get_name(pid)} нажал на курок...\n\n{story}")
@@ -1191,7 +1250,8 @@ def handle_callback(call):
             bot.edit_message_text(f"🍀 {get_name(pid)} ВЫЖИЛ!\n\n💰 Банк: {total} GC", gid, g["message_id"])
             msg2 = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid, cur, g['bets'][cur]))
             g["action_message_id"] = msg2.message_id
-            bot.answer_callback_query(call.id, "Пусто! Ты выжил"); return
+            bot.answer_callback_query(call.id, "Пусто! Ты выжил")
+            return
 
 # ========== ОБРАБОТЧИКИ НАСТРОЕК ==========
 def promo_enter_handler(m, ocid, omid):
