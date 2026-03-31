@@ -50,7 +50,14 @@ def next_turn_with_delay(gid, game, delay=4):
             games[gid]["action_message_id"] = msg.message_id
     threading.Thread(target=next_turn, daemon=True).start()
 
-# ========== 50+ ИСТОРИЙ ДЛЯ ГЛАВНОГО МЕНЮ ==========
+def ban_user_from_chat(chat_id, user_id):
+    try:
+        bot.ban_chat_member(chat_id, user_id)
+        return True
+    except:
+        return False
+
+# ========== ИСТОРИИ ==========
 MAIN_STORIES = [
     "🔫 <b>РУССКАЯ РУЛЕТКА</b>\n\nОднажды в подвале старого дома в Санкт-Петербурге собрались отчаянные игроки. Ставкой была не только GunCoin, но и собственная жизнь. Барабан крутился, пуля искала свою жертву, а победитель забирал всё. Спустя годы игра ушла в тень. Но легенда ожила.",
     "🔫 <b>РУССКАЯ РУЛЕТКА</b>\n\nСтарик Гром сидит в углу, перебирая патроны. Семь пуль я пережил, хрипит он. Седьмая оставила шрам на сердце. Ты готов к своей? Его единственный глаз сверкает в полумраке.",
@@ -58,60 +65,23 @@ MAIN_STORIES = [
 ]
 
 # ========== РП ДЕЙСТВИЯ ==========
-MISS_STORIES = [
-    "<i>{name} медленно взводит курок. Холодный металл прижат к виску. Палец дрожит. Щелчок... Пусто. Пот стекает по лицу. Сегодня смерть решила подождать.</i>",
-    "<i>{name} зажмурился. Палец на спусковом крючке. Клац! Тишина. Только собственное дыхание рвётся из груди. Пуля была так близко.</i>",
-]
+MISS_STORIES = ["<i>{name} медленно взводит курок. Холодный металл прижат к виску. Палец дрожит. Щелчок... Пусто. Пот стекает по лицу. Сегодня смерть решила подождать.</i>","<i>{name} зажмурился. Палец на спусковом крючке. Клац! Тишина. Только собственное дыхание рвётся из груди. Пуля была так близко.</i>"]
+DEATH_STORIES = ["<i>{name} нажимает на курок. БАХ! Мир взрывается болью, а затем гаснет. Тело оседает на пол. В глазах вечность.</i>","<i>{name} улыбается в последний раз. Курок спущен. БАХ! Пуля находит цель. Сознание уходит в темноту.</i>"]
+SHIELD_STORIES = ["<i>{name} нажимает на курок. БАХ! Но что-то сверкает в темноте. Щит принял удар. Пуля сплющилась о броню. {name} жив. Но щит рассыпался в прах.</i>"]
+DIAMOND_STORIES = ["<i>{name} спускает курок. БАХ! Из груди вырывается искра. Алмазная крошка летит в воздух. Пуля отскочила. Щит треснул, но выдержал. Осталось {uses} защит.</i>"]
+DOUBLE_STORIES = ["<i>{name} подносит дуло к виску. Нажимает. БАХ! Но пуля проходит в миллиметре. Удача? Или судьба?</i>"]
+MASTER_STORIES = ["<i>{name} закрывает глаза. Рука не дрожит. Щелчок. Пусто. Мастер знает, когда стрелять. А сегодня не его день.</i>"]
+INSURANCE_STORIES = ["<i>{name} спускает курок. БАХ! Боль пронзает тело... но не до конца. Страховка возвращает часть души. И часть денег. Возвращено {refund} GC.</i>"]
+SPIN_STORIES = ["<i>{name} крутит барабан. Щелчки эхом разносятся по комнате. Судьба снова играет с жизнью. Где же пуля?</i>"]
+GAME_START_STORIES = ["<i>{name} достаёт старый револьвер. В воздухе пахнет порохом и страхом. Кто готов проверить судьбу? Барабан заряжен. Смерть ждёт.</i>"]
+WIN_STORIES = ["<i>{name} опускает револьвер. Вокруг тишина. Тела павших у его ног. Смерть выбрала другого. Выигрыш {win} GC.</i>"]
+BONUS_STORIES = ["<i>Старик Гром кидает на стол горсть монет. Держи, заслужил, хрипит он. +{bonus} GC.</i>"]
 
-DEATH_STORIES = [
-    "<i>{name} нажимает на курок. БАХ! Мир взрывается болью, а затем гаснет. Тело оседает на пол. В глазах вечность.</i>",
-    "<i>{name} улыбается в последний раз. Курок спущен. БАХ! Пуля находит цель. Сознание уходит в темноту.</i>",
-]
+HARDCORE_DESCRIPTION = "💀 <b>ХАРДКОР РЕЖИМ</b>\n\n<i>Ты выбрал путь без защиты. Здесь смерть реальна.</i>\n\n<b>Правила хардкора:</b>\n• У тебя только <b>1 жизнь</b>\n• Патрон <b>остаётся в барабане</b> после выстрела\n• Щиты и защиты <b>НЕ РАБОТАЮТ</b>\n• Если пуля попадёт, ты получишь <b>навсегда бан</b> в этом чате\n\n<i>Смерть не прощает ошибок. Ты уверен?</i>"
 
-SHIELD_STORIES = [
-    "<i>{name} нажимает на курок. БАХ! Но что-то сверкает в темноте. Щит принял удар. Пуля сплющилась о броню. {name} жив. Но щит рассыпался в прах.</i>",
-]
-
-DIAMOND_STORIES = [
-    "<i>{name} спускает курок. БАХ! Из груди вырывается искра. Алмазная крошка летит в воздух. Пуля отскочила. Щит треснул, но выдержал. Осталось {uses} защит.</i>",
-]
-
-DOUBLE_STORIES = [
-    "<i>{name} подносит дуло к виску. Нажимает. БАХ! Но пуля проходит в миллиметре. Удача? Или судьба?</i>",
-]
-
-MASTER_STORIES = [
-    "<i>{name} закрывает глаза. Рука не дрожит. Щелчок. Пусто. Мастер знает, когда стрелять. А сегодня не его день.</i>",
-]
-
-INSURANCE_STORIES = [
-    "<i>{name} спускает курок. БАХ! Боль пронзает тело... но не до конца. Страховка возвращает часть души. И часть денег. Возвращено {refund} GC.</i>",
-]
-
-SPIN_STORIES = [
-    "<i>{name} крутит барабан. Щелчки эхом разносятся по комнате. Судьба снова играет с жизнью. Где же пуля?</i>",
-]
-
-GAME_START_STORIES = [
-    "<i>{name} достаёт старый револьвер. В воздухе пахнет порохом и страхом. Кто готов проверить судьбу? Барабан заряжен. Смерть ждёт.</i>",
-]
-
-WIN_STORIES = [
-    "<i>{name} опускает револьвер. Вокруг тишина. Тела павших у его ног. Смерть выбрала другого. Выигрыш {win} GC.</i>",
-]
-
-BONUS_STORIES = [
-    "<i>Старик Гром кидает на стол горсть монет. Держи, заслужил, хрипит он. +{bonus} GC.</i>",
-]
-
-HARDCORE_WARNING = "<i>Ты выбрал ХАРДКОР. Смерть здесь реальна. Если пуля попадёт, ты будешь навсегда изгнан из этого чата. Смерть не прощает ошибок. Ты уверен?</i>"
+MODE_STORIES = {"arcade": "<i>{name} усмехается. В руках револьвер с тремя патронами. Смерть любит играть. Три жизни. Три шанса.</i>"}
 
 HARDCORE_BAN_MESSAGE = "<i>Труп {name} выносят из подвала. Его больше никогда не пустят сюда. Смерть забрала не только жизнь, но и право на возвращение.</i>"
-
-MODE_STORIES = {
-    "arcade": "<i>{name} усмехается. В руках револьвер с тремя патронами. Смерть любит играть. Три жизни. Три шанса.</i>",
-    "hardcore": "<i>{name} приставляет дуло к виску. Один патрон. Одна жизнь. В этот раз никаких подарков. Смерть не прощает ошибок.</i>"
-}
 
 # ========== БД ==========
 def init_db():
@@ -167,15 +137,6 @@ def remove_gc(user_id, amt):
     ng = max(0, u["gc"]-amt)
     update_user(user_id, gc=ng)
     return ng
-
-def ban_user_from_chat(chat_id, user_id):
-    """Банит пользователя в чате (требует прав администратора у бота)"""
-    try:
-        bot.ban_chat_member(chat_id, user_id)
-        return True
-    except Exception as e:
-        print(f"Ошибка бана: {e}")
-        return False
 
 def get_rank_settings(rating):
     conn = sqlite3.connect("roulette.db")
@@ -610,6 +571,11 @@ def mode_choice_kb():
     kb.add(InlineKeyboardButton("🎲 Аркадный (3 жизни)", callback_data="mode_arcade"), InlineKeyboardButton("💀 Хардкор (1 жизнь)", callback_data="mode_hardcore"))
     return kb
 
+def hardcore_confirm_kb():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(InlineKeyboardButton("✅ Да, рискну", callback_data="mode_hardcore_confirm"), InlineKeyboardButton("❌ Нет, вернуться", callback_data="mode_choice_back"))
+    return kb
+
 def get_help_text(page):
     if page == 1:
         return "🔫 <b>РУССКАЯ РУЛЕТКА — ПОМОЩЬ</b>\n\n🎮 Игры создаются только в чатах\n\n<b>КАК ИГРАТЬ:</b>\n• /game — создать лобби, выбрать режим\n• Другие нажимают «Присоединиться»\n• Каждый делает ставку в GC\n• Ход: 🔫 Выстрелить или 🔄 Крутить\n• Пусто → продолжаешь, патрон → выбываешь\n• Последний выживший забирает ВЕСЬ банк!\n\n<b>РЕЖИМЫ ИГРЫ:</b>\n🎲 Аркадный: 3 жизни, патрон возвращается\n💀 Хардкор: 1 жизнь, патрон остаётся в барабане, проигравший получает бан в чате\n\n<b>💰 КАК ПОЛУЧИТЬ GC:</b>\n• /daily — 50 GC (+200 за 7 дней подряд)\n• Победа в игре — +5 GC\n• Повышение ранга — крупные бонусы\n• Поддержать проект — /donate\n\n<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ:</b>\n10 ₽ = 350 GC"
@@ -781,6 +747,7 @@ def handle_callback(call):
     is_private = (cid == uid)
     u = get_user(uid)
     if u["banned"] and not call.data.startswith("admin"): bot.answer_callback_query(call.id, "❌ Вы забанены!", show_alert=True); return
+    
     if call.data == "back":
         if is_private: bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid))
         else: bot.edit_message_text(get_welcome_text(), cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🎮 Создать игру", callback_data="create_game")))
@@ -1016,43 +983,42 @@ def handle_callback(call):
         if uid != ADMIN_ID: return
         bot.send_message(uid, "Введите ID и GC для списания (123456789 100):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: remove_gc_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
     
-    # ВЫБОР РЕЖИМА С ОПИСАНИЕМ
+    # ВЫБОР РЕЖИМА
     if call.data == "mode_arcade":
         cid = call.message.chat.id
         if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
         s = get_chat_settings(cid)
         if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
-        # Отправляем предупреждение о режиме
         msg = bot.send_message(cid, MODE_STORIES["arcade"].replace("{name}", get_name(uid)))
         delete_message_later(cid, msg.message_id, 3)
-        welcome = s.get('welcome_message', '')
-        if welcome: welcome = welcome.replace("{user}", get_user_link(uid)).replace("{chat}", get_chat_name(cid)); sent = bot.send_message(cid, welcome); delete_message_later(cid, sent.message_id, 10)
-        else: sent = bot.send_message(cid, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
-        games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"arcade","lives":{}}
-        for p in games[cid]["players"]: games[cid]["lives"][p] = 3
+        sent = bot.send_message(cid, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
+        games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"arcade","lives":{uid:3}}
         bot.send_message(uid, "✅ Сделай ставку:", reply_markup=bet_kb(cid))
         start_auto_kick_timer(cid, uid)
         bot.answer_callback_query(call.id, "Игра создана в аркадном режиме!")
         return
     
     if call.data == "mode_hardcore":
+        # Показываем описание хардкора и кнопки подтверждения
+        bot.edit_message_text(HARDCORE_DESCRIPTION, cid, mid, reply_markup=hardcore_confirm_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "mode_hardcore_confirm":
         cid = call.message.chat.id
         if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
         s = get_chat_settings(cid)
         if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
-        # Отправляем страшное предупреждение о хардкоре
-        msg = bot.send_message(cid, f"💀 <b>ХАРДКОР РЕЖИМ</b>\n\n{HARDCORE_WARNING}")
-        delete_message_later(cid, msg.message_id, 5)
-        msg2 = bot.send_message(cid, MODE_STORIES["hardcore"].replace("{name}", get_name(uid)))
-        delete_message_later(cid, msg2.message_id, 3)
-        welcome = s.get('welcome_message', '')
-        if welcome: welcome = welcome.replace("{user}", get_user_link(uid)).replace("{chat}", get_chat_name(cid)); sent = bot.send_message(cid, welcome); delete_message_later(cid, sent.message_id, 10)
-        else: sent = bot.send_message(cid, f"💀 <b>ХАРДКОР ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
-        games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"hardcore","lives":{}}
-        for p in games[cid]["players"]: games[cid]["lives"][p] = 1
+        sent = bot.send_message(cid, f"💀 <b>ХАРДКОР ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
+        games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"hardcore","lives":{uid:1}}
         bot.send_message(uid, "✅ Сделай ставку:", reply_markup=bet_kb(cid))
         start_auto_kick_timer(cid, uid)
-        bot.answer_callback_query(call.id, "Игра создана в хардкор режиме! Помни, смерть ведёт к бану!")
+        bot.answer_callback_query(call.id, "Игра создана в хардкор режиме! Смерть ведёт к бану!")
+        return
+    
+    if call.data == "mode_choice_back":
+        bot.edit_message_text(f"{get_user_link(uid)} создаёт игру. Выберите режим:", cid, mid, reply_markup=mode_choice_kb())
+        bot.answer_callback_query(call.id)
         return
     
     if call.data == "create_game":
@@ -1180,14 +1146,13 @@ def handle_callback(call):
                 update_user(pid, losses=u2["losses"]+1, gc=u2["gc"]+refund)
                 update_rating_and_rewards(pid, False)
                 update_chat_player(gid, pid, False)
-                # ХАРДКОР: БАН НАВСЕГДА
                 if g["mode"] == "hardcore":
                     ban_msg = bot.send_message(gid, HARDCORE_BAN_MESSAGE.replace("{name}", get_name(pid)))
                     delete_message_later(gid, ban_msg.message_id, 5)
                     if ban_user_from_chat(gid, pid):
                         bot.send_message(gid, f"🚫 {get_name(pid)} навсегда изгнан из этого чата!")
                     else:
-                        bot.send_message(gid, f"⚠️ Не удалось забанить {get_name(pid)}. Убедитесь, что бот администратор чата.")
+                        bot.send_message(gid, f"⚠️ Не удалось забанить {get_name(pid)}. Бот должен быть администратором!")
                 if len(g["players"]) == 1:
                     winner = g["players"][0]
                     total = sum(g["bets"].values())
