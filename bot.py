@@ -76,49 +76,115 @@ GAME_START_STORIES = ["<i>{name} достаёт старый револьвер.
 WIN_STORIES = ["<i>{name} опускает револьвер. Вокруг тишина. Тела павших у его ног. Смерть выбрала другого. Выигрыш {win} GC.</i>"]
 BONUS_STORIES = ["<i>Старик Гром кидает на стол горсть монет. Держи, заслужил, хрипит он. +{bonus} GC.</i>"]
 RELOAD_STORY = "<i>Старик Гром достаёт новую обойму. Щёлк-щёлк. Барабан снова полон. Игра продолжается...</i>"
+DRUNK_STORIES = ["<i>{name} пошатнулся и случайно нажал на курок в сторону {victim}... БАХ!</i>"]
+BLOOD_MARK_STORIES = ["<i>{name} сжимает револьвер. На руке вспыхивает багровая метка. Глаза стекленеют. Он целится наверняка.</i>", "<i>Кровавая метка {name} загорается в темноте. Пуля найдёт свою жертву.</i>"]
+REINCARNATION_STORIES = ["<i>{name} падает... но вдруг его глаза открываются. Из груди вырывается хрип. Смерть отступила. Реинкарнация сработала.</i>"]
+SILENCER_STORIES = ["<i>{name} нажимает на курок. Тишина. Никто не понял, что произошло. Глушитель сделал своё дело.</i>"]
+FAKE_BULLET_STORIES = ["<i>{name} нажимает на курок. БАХ! Все вздрагивают... но пули нет. Это была фальшивка. {name} усмехается.</i>"]
 
-HARDCORE_DESCRIPTION = "💀 <b>ХАРДКОР РЕЖИМ</b>\n\n<i>Ты выбрал путь без защиты. Здесь смерть реальна.</i>\n\n<b>Правила хардкора:</b>\n• У тебя только <b>1 жизнь</b>\n• Патрон <b>остаётся в барабане</b> после выстрела\n• Щиты и защиты <b>НЕ РАБОТАЮТ</b>\n• При выборе \"С БАНОМ\" — проигравший получает бан\n• Если патроны кончились — Гром перезаряжает\n\n<i>Смерть не прощает ошибок. Ты уверен?</i>"
+HARDCORE_DESCRIPTION = "💀 <b>ХАРДКОР РЕЖИМ</b>\n\n<i>Ты выбрал путь без защиты. Здесь смерть реальна.</i>\n\n<b>Правила хардкора:</b>\n• У тебя только <b>1 жизнь</b>\n• Патрон <b>остаётся в барабане</b> после выстрела\n• Щиты и защиты <b>НЕ РАБОТАЮТ</b>\n• При выборе \"С БАНОМ\" — проигравший получает бан\n\n<i>Смерть не прощает ошибок. Ты уверен?</i>"
 
 MODE_STORIES = {"arcade": "<i>{name} усмехается. В руках револьвер с тремя патронами. Смерть любит играть. Три жизни. Три шанса.</i>"}
 
 HARDCORE_BAN_MESSAGE = "<i>Труп {name} выносят из подвала. Его больше никогда не пустят сюда. Смерть забрала не только жизнь, но и право на возвращение.</i>"
 
-# ========== БД (оставляем без изменений) ==========
+# ========== БД ==========
 def init_db():
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, gc INTEGER DEFAULT 100, rating INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, total_games INTEGER DEFAULT 0, shields INTEGER DEFAULT 0, double_chance INTEGER DEFAULT 0, insurance INTEGER DEFAULT 0, diamond_shield INTEGER DEFAULT 0, master INTEGER DEFAULT 0, vip_level INTEGER DEFAULT 0, vip_until TEXT, last_daily TEXT, daily_streak INTEGER DEFAULT 1, last_monthly_bonus TEXT, banned INTEGER DEFAULT 0)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS chat_settings (chat_id INTEGER PRIMARY KEY, max_players INTEGER DEFAULT 6, min_bet INTEGER DEFAULT 10, max_bet INTEGER DEFAULT 500, game_enabled INTEGER DEFAULT 1, admin_only INTEGER DEFAULT 0, owner_id INTEGER DEFAULT 0, name TEXT DEFAULT '', bet_buttons TEXT DEFAULT '10,50,100,200,500,1000', winner_bonus INTEGER DEFAULT 0, auto_kick_minutes INTEGER DEFAULT 0, banned INTEGER DEFAULT 0)''')
+    
+    # Основные таблицы
+    c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, gc INTEGER DEFAULT 100, rating INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, total_games INTEGER DEFAULT 0, shields INTEGER DEFAULT 0, double_chance INTEGER DEFAULT 0, insurance INTEGER DEFAULT 0, diamond_shield INTEGER DEFAULT 0, master INTEGER DEFAULT 0, vip_level INTEGER DEFAULT 0, vip_until TEXT, last_daily TEXT, daily_streak INTEGER DEFAULT 1, last_monthly_bonus TEXT, banned INTEGER DEFAULT 0, blood_mark INTEGER DEFAULT 0, reincarnation INTEGER DEFAULT 0, silencer INTEGER DEFAULT 0, fake_bullet INTEGER DEFAULT 0)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS chat_settings (chat_id INTEGER PRIMARY KEY, max_players INTEGER DEFAULT 6, min_bet INTEGER DEFAULT 10, max_bet INTEGER DEFAULT 500, game_enabled INTEGER DEFAULT 1, admin_only INTEGER DEFAULT 0, owner_id INTEGER DEFAULT 0, name TEXT DEFAULT '', bet_buttons TEXT DEFAULT '10,50,100,200,500,1000', winner_bonus INTEGER DEFAULT 0, auto_kick_minutes INTEGER DEFAULT 0, banned INTEGER DEFAULT 0, drunk_shooter INTEGER DEFAULT 0, drunk_shooter_chance INTEGER DEFAULT 15, hardcore_allowed INTEGER DEFAULT 1, shields_allowed INTEGER DEFAULT 1)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS chat_stats (chat_id INTEGER PRIMARY KEY, total_games INTEGER DEFAULT 0, total_bets INTEGER DEFAULT 0, season_games INTEGER DEFAULT 0, season_bets INTEGER DEFAULT 0)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS chat_players (chat_id INTEGER, user_id INTEGER, wins INTEGER DEFAULT 0, games INTEGER DEFAULT 0, season_wins INTEGER DEFAULT 0, season_games INTEGER DEFAULT 0, PRIMARY KEY (chat_id, user_id))''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS seasons (id INTEGER PRIMARY KEY AUTOINCREMENT, number INTEGER DEFAULT 1, start_date TEXT, end_date TEXT, is_active INTEGER DEFAULT 1)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS rank_settings (rank_name TEXT PRIMARY KEY, min_rating INTEGER, max_rating INTEGER, reward_gc INTEGER, reward_shield INTEGER DEFAULT 0, reward_double INTEGER DEFAULT 0, reward_insurance INTEGER DEFAULT 0, reward_diamond INTEGER DEFAULT 0, reward_vip_days INTEGER DEFAULT 0, bet_bonus INTEGER DEFAULT 0, monthly_gc INTEGER DEFAULT 0, monthly_shield INTEGER DEFAULT 0, monthly_double INTEGER DEFAULT 0, monthly_insurance INTEGER DEFAULT 0, monthly_diamond INTEGER DEFAULT 0, monthly_vip_days INTEGER DEFAULT 0, win_points INTEGER DEFAULT 25, loss_points INTEGER DEFAULT 15)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS promocodes (code TEXT PRIMARY KEY, reward_type TEXT, reward_amount INTEGER, max_uses INTEGER, used_count INTEGER DEFAULT 0, expires TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS promocodes (code TEXT PRIMARY KEY, reward_type TEXT, reward_amount TEXT, max_uses INTEGER, used_count INTEGER DEFAULT 0, expires TEXT, chat_id INTEGER DEFAULT 0, user_id INTEGER DEFAULT 0, discount INTEGER DEFAULT 0, is_random INTEGER DEFAULT 0)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS promo_used (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, user_id INTEGER, used_at TEXT)''')
+    
     c.execute('''CREATE TABLE IF NOT EXISTS admin_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER, action TEXT, target TEXT, details TEXT, timestamp TEXT)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS reports (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, report_type TEXT, message TEXT, status TEXT DEFAULT 'new', created_at TEXT, chat_id INTEGER DEFAULT 0, reported_user_id INTEGER DEFAULT 0)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS black_market (id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, item_type TEXT, price INTEGER, rarity TEXT, effect TEXT, effect_value INTEGER, in_stock INTEGER DEFAULT 1)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS black_market_purchases (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, item_name TEXT, purchased_at TEXT, used INTEGER DEFAULT 0)''')
+    
+    # Добавление колонок для старых таблиц (если нет)
+    try:
+        c.execute("ALTER TABLE chat_settings ADD COLUMN drunk_shooter INTEGER DEFAULT 0")
+    except: pass
+    try:
+        c.execute("ALTER TABLE chat_settings ADD COLUMN drunk_shooter_chance INTEGER DEFAULT 15")
+    except: pass
+    try:
+        c.execute("ALTER TABLE chat_settings ADD COLUMN hardcore_allowed INTEGER DEFAULT 1")
+    except: pass
+    try:
+        c.execute("ALTER TABLE chat_settings ADD COLUMN shields_allowed INTEGER DEFAULT 1")
+    except: pass
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN blood_mark INTEGER DEFAULT 0")
+    except: pass
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN reincarnation INTEGER DEFAULT 0")
+    except: pass
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN silencer INTEGER DEFAULT 0")
+    except: pass
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN fake_bullet INTEGER DEFAULT 0")
+    except: pass
+    
+    # Добавление товаров в чёрный рынок (если пусто)
+    c.execute("SELECT COUNT(*) FROM black_market")
+    if c.fetchone()[0] == 0:
+        items = [
+            ("Бронежилет", "shield", 300, "обычный", "shield", 2, 1),
+            ("Глушитель", "silencer", 150, "редкий", "silencer", 1, 1),
+            ("Фальшивая пуля", "fake_bullet", 100, "редкий", "fake_bullet", 1, 1),
+            ("Реинкарнация", "reincarnation", 500, "эпический", "reincarnation", 1, 1),
+            ("Билет удвоения", "double_chance", 200, "обычный", "double_chance", 1, 1),
+            ("Крадущийся взгляд", "peek", 250, "редкий", "peek", 1, 1),
+            ("Кровавая метка", "blood_mark", 400, "эпический", "blood_mark", 1, 1),
+            ("Маска смерти", "death_mask", 600, "легендарный", "death_mask", 1, 1),
+        ]
+        for item in items:
+            c.execute("INSERT INTO black_market (item_name, item_type, price, rarity, effect, effect_value, in_stock) VALUES (?, ?, ?, ?, ?, ?, ?)", item)
+    
     c.execute("SELECT * FROM seasons WHERE is_active = 1")
     if not c.fetchone():
         now = datetime.now()
         c.execute("INSERT INTO seasons (number, start_date, end_date) VALUES (1, ?, ?)", (now.isoformat(), (now + timedelta(days=30)).isoformat()))
+    
     c.execute("SELECT COUNT(*) FROM rank_settings")
     if c.fetchone()[0] == 0:
         default_ranks = [("Новичок",0,499,100,0,0,0,0,0,0,0,0,0,0,0,0,25,15),("Стрелок",500,999,500,1,0,0,0,0,50,100,0,0,0,0,0,25,15),("Опытный",1000,1499,1000,0,1,0,0,0,100,250,0,0,0,0,0,25,15),("Мастер",1500,1999,2000,0,0,1,0,0,200,500,1,0,0,0,0,25,15),("Элита",2000,2499,4000,0,0,0,1,0,500,1000,0,1,0,0,0,25,15),("Легенда",2500,999999,8000,0,0,0,1,14,1000,2000,0,0,1,3,0,25,15)]
         for r in default_ranks: c.execute("INSERT INTO rank_settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+    
     conn.commit()
     conn.close()
 
 def get_user(user_id):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT gc, rating, wins, losses, total_games, shields, double_chance, insurance, diamond_shield, master, vip_level, vip_until, last_daily, daily_streak, last_monthly_bonus, banned FROM users WHERE user_id = ?", (user_id,))
+    c.execute("SELECT gc, rating, wins, losses, total_games, shields, double_chance, insurance, diamond_shield, master, vip_level, vip_until, last_daily, daily_streak, last_monthly_bonus, banned, blood_mark, reincarnation, silencer, fake_bullet FROM users WHERE user_id = ?", (user_id,))
     u = c.fetchone()
     if not u:
         c.execute("INSERT INTO users (user_id, gc, last_daily) VALUES (?, ?, ?)", (user_id, 100, datetime.now().isoformat()))
         conn.commit()
-        c.execute("SELECT gc, rating, wins, losses, total_games, shields, double_chance, insurance, diamond_shield, master, vip_level, vip_until, last_daily, daily_streak, last_monthly_bonus, banned FROM users WHERE user_id = ?", (user_id,))
+        c.execute("SELECT gc, rating, wins, losses, total_games, shields, double_chance, insurance, diamond_shield, master, vip_level, vip_until, last_daily, daily_streak, last_monthly_bonus, banned, blood_mark, reincarnation, silencer, fake_bullet FROM users WHERE user_id = ?", (user_id,))
         u = c.fetchone()
     conn.close()
-    return {"gc":u[0],"rating":u[1],"wins":u[2],"losses":u[3],"total_games":u[4],"shields":u[5],"double_chance":u[6],"insurance":u[7],"diamond_shield":u[8],"master":u[9],"vip_level":u[10],"vip_until":u[11],"last_daily":u[12],"daily_streak":u[13],"last_monthly_bonus":u[14],"banned":u[15]}
+    return {"gc":u[0],"rating":u[1],"wins":u[2],"losses":u[3],"total_games":u[4],"shields":u[5],"double_chance":u[6],"insurance":u[7],"diamond_shield":u[8],"master":u[9],"vip_level":u[10],"vip_until":u[11],"last_daily":u[12],"daily_streak":u[13],"last_monthly_bonus":u[14],"banned":u[15],"blood_mark":u[16],"reincarnation":u[17],"silencer":u[18],"fake_bullet":u[19]}
 
 def update_user(user_id, **kwargs):
     conn = sqlite3.connect("roulette.db")
@@ -191,14 +257,14 @@ def update_rating_and_rewards(user_id, won):
 def get_chat_settings(chat_id):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT max_players, min_bet, max_bet, game_enabled, admin_only, owner_id, name, bet_buttons, winner_bonus, auto_kick_minutes, banned FROM chat_settings WHERE chat_id = ?", (chat_id,))
+    c.execute("SELECT max_players, min_bet, max_bet, game_enabled, admin_only, owner_id, name, bet_buttons, winner_bonus, auto_kick_minutes, banned, drunk_shooter, drunk_shooter_chance, hardcore_allowed, shields_allowed FROM chat_settings WHERE chat_id = ?", (chat_id,))
     s = c.fetchone()
     if not s:
         c.execute("INSERT INTO chat_settings (chat_id) VALUES (?)", (chat_id,))
         conn.commit()
-        s = (6,10,500,1,0,0,"","10,50,100,200,500,1000",0,0,0)
+        s = (6,10,500,1,0,0,"","10,50,100,200,500,1000",0,0,0,0,15,1,1)
     conn.close()
-    return {"max_players":s[0],"min_bet":s[1],"max_bet":s[2],"game_enabled":s[3],"admin_only":s[4],"owner_id":s[5],"name":s[6],"bet_buttons":s[7],"winner_bonus":s[8],"auto_kick_minutes":s[9],"banned":s[10]}
+    return {"max_players":s[0],"min_bet":s[1],"max_bet":s[2],"game_enabled":s[3],"admin_only":s[4],"owner_id":s[5],"name":s[6],"bet_buttons":s[7],"winner_bonus":s[8],"auto_kick_minutes":s[9],"banned":s[10],"drunk_shooter":s[11],"drunk_shooter_chance":s[12],"hardcore_allowed":s[13],"shields_allowed":s[14]}
 
 def update_chat_settings(chat_id, **kwargs):
     conn = sqlite3.connect("roulette.db")
@@ -338,43 +404,128 @@ def log_admin(admin_id, action, target, details=""):
     conn.commit()
     conn.close()
 
-# ========== ПРОМОКОДЫ (без изменений) ==========
-def create_promo(code, reward_type, reward_amount, max_uses, expires_days=None):
+def add_report(user_id, report_type, message, chat_id=0, reported_user_id=0):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    expires = (datetime.now() + timedelta(days=expires_days)).isoformat() if expires_days else None
-    c.execute("INSERT OR REPLACE INTO promocodes (code, reward_type, reward_amount, max_uses, expires) VALUES (?, ?, ?, ?, ?)", (code.upper(), reward_type, reward_amount, max_uses, expires))
+    c.execute("INSERT INTO reports (user_id, report_type, message, status, created_at, chat_id, reported_user_id) VALUES (?, ?, ?, 'new', ?, ?, ?)", (user_id, report_type, message, datetime.now().isoformat(), chat_id, reported_user_id))
     conn.commit()
     conn.close()
 
-def use_promo(user_id, code):
+def get_reports(status=None):
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT reward_type, reward_amount, max_uses, used_count, expires FROM promocodes WHERE code = ?", (code.upper(),))
+    if status:
+        c.execute("SELECT id, user_id, report_type, message, status, created_at, chat_id, reported_user_id FROM reports WHERE status = ? ORDER BY created_at DESC", (status,))
+    else:
+        c.execute("SELECT id, user_id, report_type, message, status, created_at, chat_id, reported_user_id FROM reports ORDER BY created_at DESC")
+    r = c.fetchall()
+    conn.close()
+    return r
+
+def update_report_status(report_id, status):
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    c.execute("UPDATE reports SET status = ? WHERE id = ?", (status, report_id))
+    conn.commit()
+    conn.close()
+
+# ========== ПРОМОКОДЫ ==========
+def create_promo(code, reward_type, reward_amount, max_uses, expires_days=None, chat_id=0, user_id=0, discount=0, is_random=0):
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    expires = (datetime.now() + timedelta(days=expires_days)).isoformat() if expires_days else None
+    c.execute("INSERT OR REPLACE INTO promocodes (code, reward_type, reward_amount, max_uses, expires, chat_id, user_id, discount, is_random) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (code.upper(), reward_type, str(reward_amount), max_uses, expires, chat_id, user_id, discount, is_random))
+    conn.commit()
+    conn.close()
+
+def use_promo(user_id, code, chat_id=0):
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    c.execute("SELECT reward_type, reward_amount, max_uses, used_count, expires, chat_id, user_id, discount, is_random FROM promocodes WHERE code = ?", (code.upper(),))
     p = c.fetchone()
     if not p: conn.close(); return False, "❌ Промокод не найден!"
-    rt, ra, mu, uc, exp = p
+    rt, ra, mu, uc, exp, pcid, puid, disc, is_rand = p
     if exp and datetime.now() > datetime.fromisoformat(exp): conn.close(); return False, "❌ Срок действия истёк!"
     if uc >= mu: conn.close(); return False, "❌ Промокод уже использован!"
+    if pcid != 0 and pcid != chat_id: conn.close(); return False, "❌ Этот промокод не для этого чата!"
+    if puid != 0 and puid != user_id: conn.close(); return False, "❌ Этот промокод не для вас!"
     c.execute("SELECT * FROM promo_used WHERE code = ? AND user_id = ?", (code.upper(), user_id))
     if c.fetchone(): conn.close(); return False, "❌ Вы уже использовали этот промокод!"
+    
     u = get_user(user_id)
-    if rt == "gc": update_user(user_id, gc=u["gc"]+ra)
-    elif rt == "shield": update_user(user_id, shields=u["shields"]+ra)
-    elif rt == "double": update_user(user_id, double_chance=u["double_chance"]+ra)
-    elif rt == "insurance": update_user(user_id, insurance=u["insurance"]+ra)
-    elif rt == "diamond_shield": update_user(user_id, diamond_shield=u["diamond_shield"]+ra)
-    elif rt == "vip": update_user(user_id, vip_level=ra, vip_until=(datetime.now()+timedelta(days=ra)).isoformat())
+    result_msg = "✅ Промокод активирован!\n\n"
+    
+    if is_rand:
+        import random
+        prizes = [
+            ("gc", 100), ("gc", 150), ("gc", 200), ("gc", 250), ("gc", 300),
+            ("shield", 1), ("double", 1), ("insurance", 1), ("diamond_shield", 1),
+            ("vip", 1), ("vip", 3), ("blood_mark", 1)
+        ]
+        rt2, ra2 = random.choice(prizes)
+        if rt2 == "gc": update_user(user_id, gc=u["gc"]+ra2); result_msg += f"🎁 +{ra2} GC"
+        elif rt2 == "shield": update_user(user_id, shields=u["shields"]+ra2); result_msg += f"🛡️ +{ra2} Щит"
+        elif rt2 == "double": update_user(user_id, double_chance=u["double_chance"]+ra2); result_msg += f"⚡ +{ra2} Двойной шанс"
+        elif rt2 == "insurance": update_user(user_id, insurance=u["insurance"]+ra2); result_msg += f"💰 +{ra2} Страховка"
+        elif rt2 == "diamond_shield": update_user(user_id, diamond_shield=u["diamond_shield"]+ra2); result_msg += f"💎 +{ra2} Алмазный щит"
+        elif rt2 == "vip": update_user(user_id, vip_level=ra2, vip_until=(datetime.now()+timedelta(days=ra2)).isoformat()); result_msg += f"👑 VIP на {ra2} дня"
+        elif rt2 == "blood_mark": update_user(user_id, blood_mark=u["blood_mark"]+ra2); result_msg += f"🔪 +{ra2} Кровавая метка"
+    elif disc > 0:
+        update_user(user_id, discount=disc)
+        result_msg += f"🏷️ Скидка {disc}% на следующую покупку в магазине!"
+    elif rt == "all":
+        # Комбо-промокод
+        amounts = [int(x) for x in ra.split(',')]
+        update_user(user_id, gc=u["gc"]+amounts[0])
+        update_user(user_id, shields=u["shields"]+amounts[1])
+        update_user(user_id, double_chance=u["double_chance"]+amounts[2])
+        update_user(user_id, insurance=u["insurance"]+amounts[3])
+        update_user(user_id, diamond_shield=u["diamond_shield"]+amounts[4])
+        if len(amounts) > 5:
+            update_user(user_id, vip_level=amounts[5], vip_until=(datetime.now()+timedelta(days=amounts[5])).isoformat())
+        result_msg += f"💰 +{amounts[0]} GC\n🛡️ +{amounts[1]} Щит\n⚡ +{amounts[2]} Двойной шанс\n💰 +{amounts[3]} Страховка\n💎 +{amounts[4]} Алмазный щит"
+        if len(amounts) > 5: result_msg += f"\n👑 VIP на {amounts[5]} дней"
+    elif rt == "gc":
+        update_user(user_id, gc=u["gc"]+int(ra))
+        result_msg += f"💰 +{ra} GC"
+    elif rt == "shield":
+        update_user(user_id, shields=u["shields"]+int(ra))
+        result_msg += f"🛡️ +{ra} Щит"
+    elif rt == "double":
+        update_user(user_id, double_chance=u["double_chance"]+int(ra))
+        result_msg += f"⚡ +{ra} Двойной шанс"
+    elif rt == "insurance":
+        update_user(user_id, insurance=u["insurance"]+int(ra))
+        result_msg += f"💰 +{ra} Страховка"
+    elif rt == "diamond_shield":
+        update_user(user_id, diamond_shield=u["diamond_shield"]+int(ra))
+        result_msg += f"💎 +{ra} Алмазный щит"
+    elif rt == "vip":
+        update_user(user_id, vip_level=int(ra), vip_until=(datetime.now()+timedelta(days=int(ra))).isoformat())
+        result_msg += f"👑 VIP на {ra} дней"
+    elif rt == "blood_mark":
+        update_user(user_id, blood_mark=u["blood_mark"]+int(ra))
+        result_msg += f"🔪 +{ra} Кровавая метка"
+    elif rt == "reincarnation":
+        update_user(user_id, reincarnation=u["reincarnation"]+int(ra))
+        result_msg += f"🔄 +{ra} Реинкарнация"
+    elif rt == "silencer":
+        update_user(user_id, silencer=u["silencer"]+int(ra))
+        result_msg += f"🔇 +{ra} Глушитель"
+    elif rt == "fake_bullet":
+        update_user(user_id, fake_bullet=u["fake_bullet"]+int(ra))
+        result_msg += f"💀 +{ra} Фальшивая пуля"
+    
     c.execute("UPDATE promocodes SET used_count = used_count + 1 WHERE code = ?", (code.upper(),))
     c.execute("INSERT INTO promo_used (code, user_id, used_at) VALUES (?, ?, ?)", (code.upper(), user_id, datetime.now().isoformat()))
     conn.commit()
     conn.close()
-    return True, f"✅ Промокод активирован! +{ra} {rt.upper()}"
+    return True, result_msg
 
 def get_all_promos():
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
-    c.execute("SELECT code, reward_type, reward_amount, max_uses, used_count, expires FROM promocodes")
+    c.execute("SELECT code, reward_type, reward_amount, max_uses, used_count, expires, chat_id, user_id, discount, is_random FROM promocodes")
     r = c.fetchall()
     conn.close()
     return r
@@ -386,7 +537,7 @@ def delete_promo(code):
     conn.commit()
     conn.close()
 
-# ========== СЕЗОННЫЕ НАГРАДЫ (без изменений) ==========
+# ========== СЕЗОННЫЕ НАГРАДЫ ==========
 def give_season_rewards():
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
@@ -442,16 +593,117 @@ def give_season_rewards():
     conn.commit()
     conn.close()
 
+# ========== ЧЁРНЫЙ РЫНОК ==========
+black_market_active = False
+black_market_end_time = 0
+black_market_items = []
+
+def start_black_market():
+    global black_market_active, black_market_end_time, black_market_items
+    black_market_active = True
+    black_market_end_time = time.time() + 15 * 60  # 15 минут
+    
+    # Выбираем 5 случайных товаров
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    c.execute("SELECT item_name, item_type, price, rarity, effect, effect_value FROM black_market WHERE in_stock = 1 ORDER BY RANDOM() LIMIT 5")
+    black_market_items = c.fetchall()
+    conn.close()
+    
+    # Уведомляем админа
+    try:
+        bot.send_message(ADMIN_ID, f"🌑 Чёрный рынок открыт!\nДоступно {len(black_market_items)} товаров на 15 минут.")
+    except: pass
+
+def end_black_market():
+    global black_market_active
+    black_market_active = False
+
+def get_black_market_items():
+    return black_market_items
+
+def purchase_black_market_item(user_id, item_index):
+    global black_market_items
+    if not black_market_active:
+        return False, "❌ Чёрный рынок закрыт!"
+    if item_index >= len(black_market_items):
+        return False, "❌ Товар не найден!"
+    
+    item = black_market_items[item_index]
+    item_name, item_type, price, rarity, effect, effect_value = item
+    
+    u = get_user(user_id)
+    if u["gc"] < price:
+        return False, f"❌ Не хватает GC! Нужно {price}"
+    
+    remove_gc(user_id, price)
+    
+    # Выдача товара
+    if item_type == "shield":
+        update_user(user_id, shields=u["shields"] + effect_value)
+    elif item_type == "double_chance":
+        update_user(user_id, double_chance=u["double_chance"] + effect_value)
+    elif item_type == "insurance":
+        update_user(user_id, insurance=u["insurance"] + effect_value)
+    elif item_type == "diamond_shield":
+        update_user(user_id, diamond_shield=u["diamond_shield"] + effect_value)
+    elif item_type == "blood_mark":
+        update_user(user_id, blood_mark=u["blood_mark"] + effect_value)
+    elif item_type == "reincarnation":
+        update_user(user_id, reincarnation=u["reincarnation"] + effect_value)
+    elif item_type == "silencer":
+        update_user(user_id, silencer=u["silencer"] + effect_value)
+    elif item_type == "fake_bullet":
+        update_user(user_id, fake_bullet=u["fake_bullet"] + effect_value)
+    elif item_type == "peek":
+        update_user(user_id, peek=u.get("peek", 0) + effect_value)
+    elif item_type == "death_mask":
+        update_user(user_id, death_mask=u.get("death_mask", 0) + effect_value)
+    
+    # Запись покупки
+    conn = sqlite3.connect("roulette.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO black_market_purchases (user_id, item_name, purchased_at) VALUES (?, ?, ?)", (user_id, item_name, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    
+    return True, f"✅ Куплено: {item_name} за {price} GC!\nРедкость: {rarity}"
+
 # ========== КЛАВИАТУРЫ ==========
-def private_main_menu(uid):
+def private_main_menu(uid, page=1):
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("📊 Стата", callback_data="stats"), InlineKeyboardButton("🎁 Бонус", callback_data="daily"), InlineKeyboardButton("🛒 Магазин", callback_data="shop_1"), InlineKeyboardButton("🏆 Топы", callback_data="top_menu"), InlineKeyboardButton("🎫 Промокод", callback_data="promo_menu"), InlineKeyboardButton("💳 Поддержать", callback_data="donate_menu"), InlineKeyboardButton("❓ Помощь", callback_data="help_menu"))
+    
+    if page == 1:
+        kb.add(InlineKeyboardButton("📊 Стата", callback_data="stats"))
+        kb.add(InlineKeyboardButton("🎁 Бонус", callback_data="daily"))
+        kb.add(InlineKeyboardButton("🛒 Магазин", callback_data="shop_1"))
+        if black_market_active:
+            kb.add(InlineKeyboardButton("🌑 Чёрный рынок", callback_data="black_market"))
+        kb.add(InlineKeyboardButton("➡️ Далее", callback_data="menu_page_2"))
+    elif page == 2:
+        kb.add(InlineKeyboardButton("🏆 Топы", callback_data="top_menu"))
+        kb.add(InlineKeyboardButton("🎮 Активные игры", callback_data="active_games"))
+        kb.add(InlineKeyboardButton("📜 История игр", callback_data="game_history"))
+        kb.add(InlineKeyboardButton("⚙️ Настройки чатов", callback_data="my_chats_settings"))
+        kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="menu_page_1"))
+        kb.add(InlineKeyboardButton("➡️ Далее", callback_data="menu_page_3"))
+    elif page == 3:
+        kb.add(InlineKeyboardButton("📢 Поддержать", callback_data="donate_menu"))
+        kb.add(InlineKeyboardButton("❓ Помощь", callback_data="help_menu"))
+        kb.add(InlineKeyboardButton("📝 Жалоба", callback_data="report_menu"))
+        kb.add(InlineKeyboardButton("🎫 Ввести промокод", callback_data="enter_promo"))
+        kb.add(InlineKeyboardButton("⬅️ Назад", callback_data="menu_page_2"))
+    
     conn = sqlite3.connect("roulette.db")
     c = conn.cursor()
     c.execute("SELECT chat_id FROM chat_settings WHERE owner_id = ?", (uid,))
-    if c.fetchone(): kb.add(InlineKeyboardButton("⚙️ Настройки чатов", callback_data="my_chats_settings"))
+    if c.fetchone() and page != 2:
+        pass
     conn.close()
-    if uid == ADMIN_ID: kb.add(InlineKeyboardButton("👑 Админ панель", callback_data="admin_panel"))
+    
+    if uid == ADMIN_ID:
+        kb.add(InlineKeyboardButton("👑 Админ панель", callback_data="admin_panel"))
+    
     return kb
 
 def donate_menu_kb():
@@ -463,12 +715,18 @@ def donate_menu_kb():
 
 def shop_kb(page):
     kb = InlineKeyboardMarkup(row_width=2)
-    items = {1:[("🛡️ Щит","buy_shield",100),("💎 Алмазный щит","buy_diamond_shield",400),("🔄 Реинкарнация","buy_reincarnation",300)],2:[("⚡ Двойной шанс","buy_double",150),("🔫 Точный выстрел","buy_accurate",120),("🎯 Мастер","buy_master",250)],3:[("💰 Страховка","buy_insurance",200),("💊 Аптечка","buy_medkit",80),("🎲 Счастливый билет","buy_lucky",90)],4:[("👑 VIP 3 дня","buy_vip_3",500),("👑 VIP 7 дней","buy_vip_7",1200),("👑 VIP 30 дней","buy_vip_30",3000)]}
+    items = {
+        1:[("🛡️ Щит","buy_shield",100),("💎 Алмазный щит","buy_diamond_shield",400),("🔪 Кровавая метка","buy_blood_mark",400)],
+        2:[("⚡ Двойной шанс","buy_double",150),("🔄 Реинкарнация","buy_reincarnation",500),("🎯 Мастер","buy_master",250)],
+        3:[("💰 Страховка","buy_insurance",200),("💊 Аптечка","buy_medkit",80),("🎲 Счастливый билет","buy_lucky",90)],
+        4:[("👑 VIP 3 дня","buy_vip_3",500),("👑 VIP 7 дней","buy_vip_7",1200),("👑 VIP 30 дней","buy_vip_30",3000)],
+        5:[("🔇 Глушитель","buy_silencer",150),("💀 Фальшивая пуля","buy_fake_bullet",100)]
+    }
     for n,cb,p in items.get(page,[]): kb.add(InlineKeyboardButton(f"{n} — {p} GC", callback_data=cb))
     nav = []
     if page>1: nav.append(InlineKeyboardButton("◀️", callback_data=f"shop_{page-1}"))
-    nav.append(InlineKeyboardButton(f"{page}/4", callback_data="none"))
-    if page<4: nav.append(InlineKeyboardButton("▶️", callback_data=f"shop_{page+1}"))
+    nav.append(InlineKeyboardButton(f"{page}/5", callback_data="none"))
+    if page<5: nav.append(InlineKeyboardButton("▶️", callback_data=f"shop_{page+1}"))
     kb.row(*nav)
     kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
@@ -488,29 +746,68 @@ def help_menu_kb():
     kb.add(InlineKeyboardButton("1️⃣ Основное", callback_data="help_page_1"), InlineKeyboardButton("2️⃣ Магазин", callback_data="help_page_2"), InlineKeyboardButton("3️⃣ Рейтинг", callback_data="help_page_3"), InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
+def report_menu_kb():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("🚫 На игрока", callback_data="report_player"))
+    kb.add(InlineKeyboardButton("🐛 Баг", callback_data="report_bug"))
+    kb.add(InlineKeyboardButton("💰 Финансы", callback_data="report_finance"))
+    kb.add(InlineKeyboardButton("📢 Другое", callback_data="report_other"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
+    return kb
+
 def admin_panel_kb():
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"), InlineKeyboardButton("📋 Список чатов", callback_data="admin_chats"), InlineKeyboardButton("👥 Список игроков", callback_data="admin_players"), InlineKeyboardButton("🎫 Промокоды", callback_data="admin_promocodes"), InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast"), InlineKeyboardButton("🎮 Активные игры", callback_data="admin_games"), InlineKeyboardButton("📅 Сезон", callback_data="admin_season_menu"), InlineKeyboardButton("🎖️ Ранги", callback_data="admin_ranks_menu"), InlineKeyboardButton("🏆 Рейтинг чатов", callback_data="admin_chat_rating_menu"), InlineKeyboardButton("💰 Выдать GC", callback_data="admin_add_gc"), InlineKeyboardButton("💸 Забрать GC", callback_data="admin_remove_gc"), InlineKeyboardButton("🔙 Назад", callback_data="back"))
-    return kb
-
-def admin_season_kb():
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("📅 Информация", callback_data="admin_season_info"), InlineKeyboardButton("✅ Завершить сезон", callback_data="admin_season_end"), InlineKeyboardButton("🎁 Выдать награды", callback_data="admin_season_give"), InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
-    return kb
-
-def admin_ranks_kb():
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("📊 Текущие пороги", callback_data="admin_ranks_view"), InlineKeyboardButton("✏️ Изменить пороги", callback_data="admin_ranks_edit"), InlineKeyboardButton("🎁 Изменить награды", callback_data="admin_ranks_rewards"), InlineKeyboardButton("📈 Изменить коэффициенты", callback_data="admin_ranks_coeff"), InlineKeyboardButton("🔄 Сбросить", callback_data="admin_ranks_reset"), InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
-    return kb
-
-def admin_chat_rating_kb():
-    kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("📊 Просмотр топа", callback_data="admin_chat_top"), InlineKeyboardButton("🔄 Сбросить рейтинг", callback_data="admin_chat_reset"), InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+    kb.add(InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"))
+    kb.add(InlineKeyboardButton("📋 Список чатов", callback_data="admin_chats"))
+    kb.add(InlineKeyboardButton("👥 Список игроков", callback_data="admin_players"))
+    kb.add(InlineKeyboardButton("🎫 Промокоды", callback_data="admin_promocodes"))
+    kb.add(InlineKeyboardButton("📝 Жалобы", callback_data="admin_reports"))
+    kb.add(InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast"))
+    kb.add(InlineKeyboardButton("🎮 Активные игры", callback_data="admin_games"))
+    kb.add(InlineKeyboardButton("🌑 Чёрный рынок", callback_data="admin_black_market"))
+    kb.add(InlineKeyboardButton("📅 Сезон", callback_data="admin_season_menu"))
+    kb.add(InlineKeyboardButton("🎖️ Ранги", callback_data="admin_ranks_menu"))
+    kb.add(InlineKeyboardButton("🏆 Рейтинг чатов", callback_data="admin_chat_rating_menu"))
+    kb.add(InlineKeyboardButton("💰 Выдать GC", callback_data="admin_add_gc"))
+    kb.add(InlineKeyboardButton("💸 Забрать GC", callback_data="admin_remove_gc"))
+    kb.add(InlineKeyboardButton("🎁 Выдать предмет", callback_data="admin_give_item"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
     return kb
 
 def admin_promocodes_kb():
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton("➕ Создать", callback_data="admin_create_promo"), InlineKeyboardButton("📋 Список", callback_data="admin_list_promos"), InlineKeyboardButton("🗑️ Удалить", callback_data="admin_delete_promo"), InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+    kb.add(InlineKeyboardButton("➕ Создать", callback_data="admin_create_promo"))
+    kb.add(InlineKeyboardButton("📋 Список", callback_data="admin_list_promos"))
+    kb.add(InlineKeyboardButton("🗑️ Удалить", callback_data="admin_delete_promo"))
+    kb.add(InlineKeyboardButton("🎁 Промо для чата", callback_data="admin_promo_chat"))
+    kb.add(InlineKeyboardButton("👤 Промо для игрока", callback_data="admin_promo_user"))
+    kb.add(InlineKeyboardButton("🎲 Рандомный промо", callback_data="admin_promo_random"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+    return kb
+
+def admin_season_kb():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("📅 Информация", callback_data="admin_season_info"))
+    kb.add(InlineKeyboardButton("✅ Завершить сезон", callback_data="admin_season_end"))
+    kb.add(InlineKeyboardButton("🎁 Выдать награды", callback_data="admin_season_give"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+    return kb
+
+def admin_ranks_kb():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("📊 Текущие пороги", callback_data="admin_ranks_view"))
+    kb.add(InlineKeyboardButton("✏️ Изменить пороги", callback_data="admin_ranks_edit"))
+    kb.add(InlineKeyboardButton("🎁 Изменить награды", callback_data="admin_ranks_rewards"))
+    kb.add(InlineKeyboardButton("📈 Изменить коэффициенты", callback_data="admin_ranks_coeff"))
+    kb.add(InlineKeyboardButton("🔄 Сбросить", callback_data="admin_ranks_reset"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+    return kb
+
+def admin_chat_rating_kb():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton("📊 Просмотр топа", callback_data="admin_chat_top"))
+    kb.add(InlineKeyboardButton("🔄 Сбросить рейтинг", callback_data="admin_chat_reset"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
     return kb
 
 def my_chats_kb(uid):
@@ -541,7 +838,19 @@ def chat_settings_kb(cid):
     place = c.fetchone()[0]+1
     conn.close()
     info = f"📌 <b>{cn}</b>\n🆔 ID: <code>{cid}</code>\n🎮 Всего игр: {stats['total_games']}\n💰 Всего ставок: {stats['total_bets']} GC\n📊 Рейтинг: {rating} (место #{place})\n\n⚙️ <b>НАСТРОЙКИ:</b>"
-    kb.add(InlineKeyboardButton(f"👥 Макс игроков: {s['max_players']}", callback_data=f"set_max_players_{cid}"), InlineKeyboardButton(f"💰 Мин ставка: {s['min_bet']} GC", callback_data=f"set_min_bet_{cid}"), InlineKeyboardButton(f"💎 Макс ставка: {s['max_bet']} GC", callback_data=f"set_max_bet_{cid}"), InlineKeyboardButton(f"🎮 Кнопки: {s['bet_buttons']}", callback_data=f"set_bet_buttons_{cid}"), InlineKeyboardButton(f"🎮 Игры: {'✅ Вкл' if s['game_enabled'] else '❌ Выкл'}", callback_data=f"toggle_game_{cid}"), InlineKeyboardButton(f"👑 Только админы: {'✅ Да' if s['admin_only'] else '❌ Нет'}", callback_data=f"toggle_admin_only_{cid}"), InlineKeyboardButton(f"🎁 Бонус: {s['winner_bonus']} GC", callback_data=f"set_winner_bonus_{cid}"), InlineKeyboardButton(f"🛡️ Авто-кик: {s['auto_kick_minutes']} мин", callback_data=f"set_auto_kick_{cid}"), InlineKeyboardButton("🔄 Сбросить статистику", callback_data=f"reset_stats_{cid}"), InlineKeyboardButton("🔙 Назад", callback_data="my_chats_settings"))
+    kb.add(InlineKeyboardButton(f"👥 Макс игроков: {s['max_players']}", callback_data=f"set_max_players_{cid}"))
+    kb.add(InlineKeyboardButton(f"💰 Мин ставка: {s['min_bet']} GC", callback_data=f"set_min_bet_{cid}"))
+    kb.add(InlineKeyboardButton(f"💎 Макс ставка: {s['max_bet']} GC", callback_data=f"set_max_bet_{cid}"))
+    kb.add(InlineKeyboardButton(f"🎮 Кнопки: {s['bet_buttons']}", callback_data=f"set_bet_buttons_{cid}"))
+    kb.add(InlineKeyboardButton(f"🎮 Игры: {'✅ Вкл' if s['game_enabled'] else '❌ Выкл'}", callback_data=f"toggle_game_{cid}"))
+    kb.add(InlineKeyboardButton(f"👑 Только админы: {'✅ Да' if s['admin_only'] else '❌ Нет'}", callback_data=f"toggle_admin_only_{cid}"))
+    kb.add(InlineKeyboardButton(f"🎁 Бонус: {s['winner_bonus']} GC", callback_data=f"set_winner_bonus_{cid}"))
+    kb.add(InlineKeyboardButton(f"🛡️ Авто-кик: {s['auto_kick_minutes']} мин", callback_data=f"set_auto_kick_{cid}"))
+    kb.add(InlineKeyboardButton(f"🔫 Пьяный стрелок: {'✅ Вкл' if s['drunk_shooter'] else '❌ Выкл'} ({s['drunk_shooter_chance']}%)", callback_data=f"toggle_drunk_{cid}"))
+    kb.add(InlineKeyboardButton(f"💀 Хардкор: {'✅ Разрешён' if s['hardcore_allowed'] else '❌ Запрещён'}", callback_data=f"toggle_hardcore_{cid}"))
+    kb.add(InlineKeyboardButton(f"🛡️ Защиты: {'✅ Разрешены' if s['shields_allowed'] else '❌ Запрещены'}", callback_data=f"toggle_shields_{cid}"))
+    kb.add(InlineKeyboardButton("🔄 Сбросить статистику", callback_data=f"reset_stats_{cid}"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="my_chats_settings"))
     return kb, info
 
 def game_lobby_kb(cid):
@@ -579,11 +888,21 @@ def hardcore_ban_choice_kb():
     kb.add(InlineKeyboardButton("⚡ С баном", callback_data="mode_hardcore_ban"), InlineKeyboardButton("🛡️ Без бана", callback_data="mode_hardcore_noban"))
     return kb
 
+def black_market_kb():
+    items = get_black_market_items()
+    kb = InlineKeyboardMarkup(row_width=1)
+    for i, item in enumerate(items):
+        item_name, item_type, price, rarity, effect, effect_value = item
+        emoji = "🟢" if rarity == "обычный" else "🟣" if rarity == "редкий" else "🟠" if rarity == "эпический" else "🔴"
+        kb.add(InlineKeyboardButton(f"{emoji} {item_name} — {price} GC", callback_data=f"bm_buy_{i}"))
+    kb.add(InlineKeyboardButton("🔙 Назад", callback_data="back"))
+    return kb
+
 def get_help_text(page):
     if page == 1:
         return "🔫 <b>РУССКАЯ РУЛЕТКА — ПОМОЩЬ</b>\n\n🎮 Игры создаются только в чатах\n\n<b>КАК ИГРАТЬ:</b>\n• /game — создать лобби, выбрать режим\n• Другие нажимают «Присоединиться»\n• Каждый делает ставку в GC\n• Ход: 🔫 Выстрелить или 🔄 Крутить\n• Пусто → продолжаешь, патрон → выбываешь\n• Последний выживший забирает ВЕСЬ банк!\n\n<b>РЕЖИМЫ ИГРЫ:</b>\n🎲 Аркадный: 3 жизни, защиты работают\n💀 Хардкор: 1 жизнь, патрон остаётся, защиты НЕ работают\n\n<b>💰 КАК ПОЛУЧИТЬ GC:</b>\n• /daily — 50 GC (+200 за 7 дней подряд)\n• Победа в игре — +5 GC\n• Повышение ранга — крупные бонусы\n• Поддержать проект — /donate\n\n<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ:</b>\n10 ₽ = 350 GC"
     elif page == 2:
-        return "🔫 <b>МАГАЗИН СТАРИКА ГРОМА</b>\n\n«Заходи, не бойся. Пули здесь не летают... пока.»\n\n<b>🛡️ ЗАЩИТЫ:</b>\n• Щит (100 GC) — спасает от 1 патрона\n• Алмазный щит (400 GC) — спасает от 3 патронов\n• Двойной шанс (150 GC) — +10% к удаче\n• Страховка (200 GC) — возврат 50% ставки\n• Мастер (250 GC) — +5% к удаче НАВСЕГДА\n\n<b>💊 ВОССТАНОВЛЕНИЕ:</b>\n• Аптечка (80 GC) — +50 GC\n• Счастливый билет (90 GC) — случайный приз\n\n<b>👑 VIP:</b>\n• VIP 3 дня (500 GC) — +20% к выигрышу\n• VIP 7 дней (1200 GC) — +30% + щит\n• VIP 30 дней (3000 GC) — +50% + щит + страховка"
+        return "🔫 <b>МАГАЗИН СТАРИКА ГРОМА</b>\n\n«Заходи, не бойся. Пули здесь не летают... пока.»\n\n<b>🛡️ ЗАЩИТЫ:</b>\n• Щит (100 GC) — спасает от 1 патрона\n• Алмазный щит (400 GC) — спасает от 3 патронов\n• Кровавая метка (400 GC) — гарантированное убийство\n• Реинкарнация (500 GC) — воскрешение в аркаде\n• Глушитель (150 GC) — скрывает твой выстрел\n• Фальшивая пуля (100 GC) — имитация выстрела\n\n<b>💊 ВОССТАНОВЛЕНИЕ:</b>\n• Аптечка (80 GC) — +50 GC\n• Счастливый билет (90 GC) — случайный приз\n\n<b>👑 VIP:</b>\n• VIP 3 дня (500 GC) — +20% к выигрышу\n• VIP 7 дней (1200 GC) — +30% + щит\n• VIP 30 дней (3000 GC) — +50% + щит + страховка"
     else:
         return "🔫 <b>РЕЙТИНГ И КОМАНДЫ</b>\n\n<b>🏆 РЕЙТИНГ И РАНГИ:</b>\n• За победу: +25 | За поражение: -15\n• Ранги: Новичок (0) → Стрелок (500) → Опытный (1000) → Мастер (1500) → Элита (2000) → Легенда (2500)\n• При повышении ранга — крупные награды!\n\n<b>📊 КОМАНДЫ (в ЛС):</b>\n/start, /balance, /daily, /shop, /top, /promo, /donate, /help\n\n<b>📊 КОМАНДЫ (в чатах):</b>\n/chatrating — топ игроков чата\n/chattop — топ чатов\n\n<b>⚙️ ДЛЯ СОЗДАТЕЛЯ ЧАТА:</b>\nНастройки чата — в ЛС → «Настройки чатов»"
 
@@ -630,7 +949,6 @@ def update_lobby_message(cid):
     except: pass
 
 def reload_revolver(gid):
-    """Перезарядка револьвера: 6 гнёзд, 1 патрон"""
     games[gid]["chambers"] = {}
     for p in games[gid]["players"]:
         games[gid]["chambers"][p] = random.randint(1, 6)
@@ -669,7 +987,7 @@ def balance_cmd(m):
     vip = f"{u['vip_level']} дней" if u["vip_until"] and datetime.now() < datetime.fromisoformat(u["vip_until"]) else "Нет"
     rn = get_rank_name(u["rating"])
     re = get_rank_emoji(u["rating"])
-    bot.reply_to(m, f"<b>📊 СТАТА</b>\n\n🔫 GC: {u['gc']}\n🏆 Рейтинг: {u['rating']}\n🏅 Ранг: {re} {rn}\n\n📈 Побед: {u['wins']} | Поражений: {u['losses']}\n🎮 Игр: {u['total_games']} | % побед: {wp}%\n\n🛡️ Щитов: {u['shields']} | Алмазных: {u['diamond_shield']}\n⚡ Двойных: {u['double_chance']} | 💰 Страховок: {u['insurance']}\n🎯 Мастер: {'✅' if u['master'] else '❌'}\n👑 VIP: {vip}")
+    bot.reply_to(m, f"<b>📊 СТАТА</b>\n\n🔫 GC: {u['gc']}\n🏆 Рейтинг: {u['rating']}\n🏅 Ранг: {re} {rn}\n\n📈 Побед: {u['wins']} | Поражений: {u['losses']}\n🎮 Игр: {u['total_games']} | % побед: {wp}%\n\n🛡️ Щитов: {u['shields']} | Алмазных: {u['diamond_shield']}\n⚡ Двойных: {u['double_chance']} | 💰 Страховок: {u['insurance']}\n🎯 Мастер: {'✅' if u['master'] else '❌'}\n🔪 Кровавых меток: {u.get('blood_mark', 0)}\n🔄 Реинкарнаций: {u.get('reincarnation', 0)}\n🔇 Глушителей: {u.get('silencer', 0)}\n💀 Фальшивых пуль: {u.get('fake_bullet', 0)}\n👑 VIP: {vip}")
 
 @bot.message_handler(commands=['daily'])
 def daily_cmd(m):
@@ -752,134 +1070,463 @@ def my_chat_member(up):
 # ========== ОСНОВНОЙ КОЛБЭК ==========
 @bot.callback_query_handler(func=lambda c: True)
 def handle_callback(call):
-    global games
+    global games, black_market_active
     uid, cid, mid = call.from_user.id, call.message.chat.id, call.message.message_id
     is_private = (cid == uid)
     u = get_user(uid)
     if u["banned"] and not call.data.startswith("admin"): bot.answer_callback_query(call.id, "❌ Вы забанены!", show_alert=True); return
     
+    # ========== НАВИГАЦИЯ ПО МЕНЮ ==========
     if call.data == "back":
-        if is_private: bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid))
-        else: bot.edit_message_text(get_welcome_text(), cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🎮 Создать игру", callback_data="create_game")))
-        bot.answer_callback_query(call.id); return
-    if call.data == "none": bot.answer_callback_query(call.id); return
-    if call.data == "help_menu": bot.edit_message_text(get_help_text(1), cid, mid, reply_markup=help_menu_kb()); bot.answer_callback_query(call.id); return
-    if call.data in ["help_page_1","help_page_2","help_page_3"]: p = int(call.data.split("_")[2]); bot.edit_message_text(get_help_text(p), cid, mid, reply_markup=help_menu_kb()); bot.answer_callback_query(call.id); return
-    if call.data == "donate_menu": bot.edit_message_text("<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ</b>\n\n<b>Курс:</b> 10 ₽ = 350 GC\n\n<b>Способы поддержки:</b>\n\n1️⃣ <b>DonationAlerts</b>\nhttps://www.donationalerts.com/r/FxHoFiLiOn\n\n2️⃣ <b>Карта</b>\n<code>2202 2081 8206 1235</code>\n\n<b>После перевода:</b>\n• Отправьте скриншот чека @HoFiLiOnclkc\n• Укажите свой ID\n• Получите GC на баланс!", cid, mid, reply_markup=donate_menu_kb()); bot.answer_callback_query(call.id); return
-    if call.data == "donate_card": bot.edit_message_text("💳 <b>КАРТА</b>\n\n<code>2202 2081 8206 1235</code>\n\nПосле перевода отправьте чек @HoFiLiOnclkc", cid, mid, reply_markup=donate_menu_kb()); bot.answer_callback_query(call.id); return
+        if is_private:
+            bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid))
+        else:
+            bot.edit_message_text(get_welcome_text(), cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🎮 Создать игру", callback_data="create_game")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "menu_page_1":
+        bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid, page=1))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "menu_page_2":
+        bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid, page=2))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "menu_page_3":
+        bot.edit_message_text(random.choice(MAIN_STORIES), cid, mid, reply_markup=private_main_menu(uid, page=3))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "none":
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "help_menu":
+        bot.edit_message_text(get_help_text(1), cid, mid, reply_markup=help_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data in ["help_page_1","help_page_2","help_page_3"]:
+        p = int(call.data.split("_")[2])
+        bot.edit_message_text(get_help_text(p), cid, mid, reply_markup=help_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "donate_menu":
+        bot.edit_message_text("<b>💳 ПОДДЕРЖАТЬ ПРОЕКТ</b>\n\n<b>Курс:</b> 10 ₽ = 350 GC\n\n<b>Способы поддержки:</b>\n\n1️⃣ <b>DonationAlerts</b>\nhttps://www.donationalerts.com/r/FxHoFiLiOn\n\n2️⃣ <b>Карта</b>\n<code>2202 2081 8206 1235</code>\n\n<b>После перевода:</b>\n• Отправьте скриншот чека @HoFiLiOnclkc\n• Укажите свой ID\n• Получите GC на баланс!", cid, mid, reply_markup=donate_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "donate_card":
+        bot.edit_message_text("💳 <b>КАРТА</b>\n\n<code>2202 2081 8206 1235</code>\n\nПосле перевода отправьте чек @HoFiLiOnclkc", cid, mid, reply_markup=donate_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== СТАТИСТИКА ==========
     if call.data == "stats":
         wp = int(u["wins"]/max(1,u["total_games"])*100)
         vip = f"{u['vip_level']} дней" if u["vip_until"] and datetime.now() < datetime.fromisoformat(u["vip_until"]) else "Нет"
-        bot.edit_message_text(f"<b>📊 СТАТА</b>\n\n🔫 GC: {u['gc']}\n🏆 Рейтинг: {u['rating']}\n🏅 Ранг: {get_rank_emoji(u['rating'])} {get_rank_name(u['rating'])}\n\n📈 Побед: {u['wins']} | Поражений: {u['losses']}\n🎮 Игр: {u['total_games']} | % побед: {wp}%\n\n🛡️ Щитов: {u['shields']} | Алмазных: {u['diamond_shield']}\n⚡ Двойных: {u['double_chance']} | 💰 Страховок: {u['insurance']}\n🎯 Мастер: {'✅' if u['master'] else '❌'}\n👑 VIP: {vip}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back"))); bot.answer_callback_query(call.id); return
+        bot.edit_message_text(f"<b>📊 СТАТА</b>\n\n🔫 GC: {u['gc']}\n🏆 Рейтинг: {u['rating']}\n🏅 Ранг: {get_rank_emoji(u['rating'])} {get_rank_name(u['rating'])}\n\n📈 Побед: {u['wins']} | Поражений: {u['losses']}\n🎮 Игр: {u['total_games']} | % побед: {wp}%\n\n🛡️ Щитов: {u['shields']} | Алмазных: {u['diamond_shield']}\n⚡ Двойных: {u['double_chance']} | 💰 Страховок: {u['insurance']}\n🎯 Мастер: {'✅' if u['master'] else '❌'}\n🔪 Кровавых меток: {u.get('blood_mark', 0)}\n🔄 Реинкарнаций: {u.get('reincarnation', 0)}\n🔇 Глушителей: {u.get('silencer', 0)}\n💀 Фальшивых пуль: {u.get('fake_bullet', 0)}\n👑 VIP: {vip}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "daily":
         last = datetime.fromisoformat(u["last_daily"]) if u["last_daily"] else datetime.min
         now = datetime.now()
-        if now - last < timedelta(days=1): h = 24 - (now-last).seconds//3600; bot.answer_callback_query(call.id, f"⏰ Бонус через {h} ч", show_alert=True); return
+        if now - last < timedelta(days=1):
+            h = 24 - (now-last).seconds//3600
+            bot.answer_callback_query(call.id, f"⏰ Бонус через {h} ч", show_alert=True)
+            return
         bonus = 50
-        if u["daily_streak"] >= 7: bonus += 200; update_user(uid, daily_streak=1)
-        else: update_user(uid, daily_streak=u["daily_streak"]+1)
+        if u["daily_streak"] >= 7:
+            bonus += 200
+            update_user(uid, daily_streak=1)
+        else:
+            update_user(uid, daily_streak=u["daily_streak"]+1)
         update_user(uid, gc=u["gc"]+bonus, last_daily=now.isoformat())
-        bot.edit_message_text(f"🎁 +{bonus} GC\n💰 Баланс: {u['gc']+bonus} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back"))); bot.answer_callback_query(call.id); return
+        bot.edit_message_text(f"🎁 +{bonus} GC\n💰 Баланс: {u['gc']+bonus} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== МАГАЗИН ==========
     if call.data.startswith("shop_"):
         p = int(call.data.split("_")[1])
-        bot.edit_message_text(f"<b>🛒 МАГАЗИН СТАРИКА ГРОМА — {p}/4</b>\n\n«Заходи, не бойся. Пули здесь не летают... пока.»", cid, mid, reply_markup=shop_kb(p))
-        bot.answer_callback_query(call.id); return
-    buy = {"buy_shield":("shields",100,"Щит"),"buy_diamond_shield":("diamond_shield",400,"Алмазный щит"),"buy_double":("double_chance",150,"Двойной шанс"),"buy_insurance":("insurance",200,"Страховка")}
-    if call.data in buy:
-        k,v,p = buy[call.data]
-        if u["gc"] >= v:
-            update_user(uid, gc=u["gc"]-v, **{k: u[k]+1})
-            bot.answer_callback_query(call.id, f"✅ {p} куплен!", show_alert=True)
-            bot.edit_message_text(f"✅ {p} куплен!\n💰 Осталось: {u['gc']-v} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, f"❌ Нужно {v} GC!", show_alert=True)
+        bot.edit_message_text(f"<b>🛒 МАГАЗИН СТАРИКА ГРОМА — {p}/5</b>\n\n«Заходи, не бойся. Пули здесь не летают... пока.»", cid, mid, reply_markup=shop_kb(p))
+        bot.answer_callback_query(call.id)
         return
-    if call.data == "buy_accurate":
-        if u["gc"] >= 120: update_user(uid, gc=u["gc"]-120); bot.answer_callback_query(call.id, "✅ Точный выстрел!", show_alert=True); bot.edit_message_text("🔫 Точный выстрел куплен!", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, "❌ Нужно 120 GC!", show_alert=True)
+    
+    buy_items = {
+        "buy_shield": ("shields", 100, "Щит"),
+        "buy_diamond_shield": ("diamond_shield", 400, "Алмазный щит"),
+        "buy_double": ("double_chance", 150, "Двойной шанс"),
+        "buy_insurance": ("insurance", 200, "Страховка"),
+        "buy_blood_mark": ("blood_mark", 400, "Кровавая метка"),
+        "buy_reincarnation": ("reincarnation", 500, "Реинкарнация"),
+        "buy_silencer": ("silencer", 150, "Глушитель"),
+        "buy_fake_bullet": ("fake_bullet", 100, "Фальшивая пуля")
+    }
+    
+    if call.data in buy_items:
+        key, price, name = buy_items[call.data]
+        if u["gc"] >= price:
+            update_user(uid, gc=u["gc"]-price, **{key: u[key] + 1})
+            bot.answer_callback_query(call.id, f"✅ {name} куплен!", show_alert=True)
+            bot.edit_message_text(f"✅ {name} куплен!\n💰 Осталось: {u['gc']-price} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            bot.answer_callback_query(call.id, f"❌ Нужно {price} GC!", show_alert=True)
         return
+    
     if call.data == "buy_master":
-        if u["master"]: bot.answer_callback_query(call.id, "❌ Уже есть мастер!", show_alert=True)
-        elif u["gc"] >= 250: update_user(uid, gc=u["gc"]-250, master=1); bot.answer_callback_query(call.id, "✅ Мастер +5% к удаче!", show_alert=True); bot.edit_message_text("🎯 Мастер куплен!", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, "❌ Нужно 250 GC!", show_alert=True)
+        if u["master"]:
+            bot.answer_callback_query(call.id, "❌ Уже есть мастер!", show_alert=True)
+        elif u["gc"] >= 250:
+            update_user(uid, gc=u["gc"]-250, master=1)
+            bot.answer_callback_query(call.id, "✅ Мастер +5% к удаче!", show_alert=True)
+            bot.edit_message_text("🎯 Мастер куплен!", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            bot.answer_callback_query(call.id, "❌ Нужно 250 GC!", show_alert=True)
         return
+    
     if call.data == "buy_medkit":
-        if u["gc"] >= 80: update_user(uid, gc=u["gc"]-80); add_gc(uid,50); bot.answer_callback_query(call.id, "✅ +50 GC", show_alert=True); bot.edit_message_text("💊 Аптечка! +50 GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, "❌ Нужно 80 GC!", show_alert=True)
+        if u["gc"] >= 80:
+            update_user(uid, gc=u["gc"]-80)
+            add_gc(uid, 50)
+            bot.answer_callback_query(call.id, "✅ +50 GC", show_alert=True)
+            bot.edit_message_text("💊 Аптечка! +50 GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            bot.answer_callback_query(call.id, "❌ Нужно 80 GC!", show_alert=True)
         return
+    
     if call.data == "buy_lucky":
         if u["gc"] >= 90:
             update_user(uid, gc=u["gc"]-90)
-            pr = random.choice([20,30,50,80,100,150,200,"shield","double","insurance"])
-            if pr == "shield": update_user(uid, shields=u["shields"]+1); msg = "🛡️ Щит"
-            elif pr == "double": update_user(uid, double_chance=u["double_chance"]+1); msg = "⚡ Двойной шанс"
-            elif pr == "insurance": update_user(uid, insurance=u["insurance"]+1); msg = "💰 Страховка"
-            else: add_gc(uid, pr); msg = f"{pr} GC"
-            bot.answer_callback_query(call.id, f"✅ {msg}!", show_alert=True); bot.edit_message_text(f"🎲 Счастливый билет!\nВыпало: {msg}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, "❌ Нужно 90 GC!", show_alert=True)
+            pr = random.choice([20,30,50,80,100,150,200,"shield","double","insurance","blood_mark"])
+            if pr == "shield":
+                update_user(uid, shields=u["shields"]+1)
+                msg = "🛡️ Щит"
+            elif pr == "double":
+                update_user(uid, double_chance=u["double_chance"]+1)
+                msg = "⚡ Двойной шанс"
+            elif pr == "insurance":
+                update_user(uid, insurance=u["insurance"]+1)
+                msg = "💰 Страховка"
+            elif pr == "blood_mark":
+                update_user(uid, blood_mark=u["blood_mark"]+1)
+                msg = "🔪 Кровавая метка"
+            else:
+                add_gc(uid, pr)
+                msg = f"{pr} GC"
+            bot.answer_callback_query(call.id, f"✅ {msg}!", show_alert=True)
+            bot.edit_message_text(f"🎲 Счастливый билет!\nВыпало: {msg}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            bot.answer_callback_query(call.id, "❌ Нужно 90 GC!", show_alert=True)
         return
+    
     if call.data in ["buy_vip_3","buy_vip_7","buy_vip_30"]:
         d = 3 if call.data=="buy_vip_3" else 7 if call.data=="buy_vip_7" else 30
         p = 500 if d==3 else 1200 if d==7 else 3000
-        if u["gc"] >= p: update_user(uid, gc=u["gc"]-p, vip_level=d, vip_until=(datetime.now()+timedelta(days=d)).isoformat()); bot.answer_callback_query(call.id, f"✅ VIP {d} дней!", show_alert=True); bot.edit_message_text(f"👑 VIP на {d} дней!\n💰 Осталось: {u['gc']-p} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
-        else: bot.answer_callback_query(call.id, f"❌ Нужно {p} GC!", show_alert=True)
+        if u["gc"] >= p:
+            update_user(uid, gc=u["gc"]-p, vip_level=d, vip_until=(datetime.now()+timedelta(days=d)).isoformat())
+            bot.answer_callback_query(call.id, f"✅ VIP {d} дней!", show_alert=True)
+            bot.edit_message_text(f"👑 VIP на {d} дней!\n💰 Осталось: {u['gc']-p} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            bot.answer_callback_query(call.id, f"❌ Нужно {p} GC!", show_alert=True)
         return
-    if call.data == "top_menu": bot.edit_message_text("<b>🏆 ТОПЫ</b>", cid, mid, reply_markup=top_menu_kb()); bot.answer_callback_query(call.id); return
+    
+    # ========== ТОПЫ ==========
+    if call.data == "top_menu":
+        bot.edit_message_text("<b>🏆 ТОПЫ</b>", cid, mid, reply_markup=top_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "top_rating":
-        t = get_top_players("rating",10); text = "<b>🏆 ТОП ПО РЕЙТИНГУ</b>\n\n"
-        for i,(uid2,r,w) in enumerate(t,1): text += f"{i}. {get_user_link(uid2)} — {get_rank_emoji(r)} {r}, {w} побед\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu"))); bot.answer_callback_query(call.id); return
+        t = get_top_players("rating",10)
+        text = "<b>🏆 ТОП ПО РЕЙТИНГУ</b>\n\n"
+        for i,(uid2,r,w) in enumerate(t,1):
+            text += f"{i}. {get_user_link(uid2)} — {get_rank_emoji(r)} {r}, {w} побед\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "top_gc":
-        t = get_top_players("gc",10); text = "<b>💰 ТОП ПО GC</b>\n\n"
-        for i,(uid2,gc,w) in enumerate(t,1): text += f"{i}. {get_user_link(uid2)} — {gc} GC, {w} побед\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu"))); bot.answer_callback_query(call.id); return
+        t = get_top_players("gc",10)
+        text = "<b>💰 ТОП ПО GC</b>\n\n"
+        for i,(uid2,gc,w) in enumerate(t,1):
+            text += f"{i}. {get_user_link(uid2)} — {gc} GC, {w} побед\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "top_wins":
-        t = get_top_players("wins",10); text = "<b>🎮 ТОП ПО ПОБЕДАМ</b>\n\n"
-        for i,(uid2,w,r) in enumerate(t,1): text += f"{i}. {get_user_link(uid2)} — {w} побед, {get_rank_emoji(r)} {r}\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu"))); bot.answer_callback_query(call.id); return
+        t = get_top_players("wins",10)
+        text = "<b>🎮 ТОП ПО ПОБЕДАМ</b>\n\n"
+        for i,(uid2,w,r) in enumerate(t,1):
+            text += f"{i}. {get_user_link(uid2)} — {w} побед, {get_rank_emoji(r)} {r}\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "top_chats":
-        ch = get_all_chats_rating(); text = "<b>🏆 ТОП ЧАТОВ</b>\n\n"
-        for i,(cid2,g,b) in enumerate(ch[:10],1): r = (g*10)+(b//10); text += f"{i}. {get_chat_name(cid2)}\n   📊 {r} | 🎮 {g} | 💰 {b}\n\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu"))); bot.answer_callback_query(call.id); return
-    if call.data == "promo_menu": bot.edit_message_text("<b>🎫 ПРОМОКОДЫ</b>\n\nВведи /promo КОД", cid, mid, reply_markup=promo_menu_kb()); bot.answer_callback_query(call.id); return
-    if call.data == "enter_promo": bot.send_message(uid, "Введите промокод:"); bot.register_next_step_handler_by_chat_id(uid, lambda m: promo_enter_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data == "my_chats_settings": bot.edit_message_text("<b>⚙️ НАСТРОЙКИ ЧАТОВ</b>\n\nВыбери чат:", cid, mid, reply_markup=my_chats_kb(uid)); bot.answer_callback_query(call.id); return
+        ch = get_all_chats_rating()
+        text = "<b>🏆 ТОП ЧАТОВ</b>\n\n"
+        for i,(cid2,g,b) in enumerate(ch[:10],1):
+            r = (g*10)+(b//10)
+            text += f"{i}. {get_chat_name(cid2)}\n   📊 {r} | 🎮 {g} | 💰 {b}\n\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="top_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== ПРОМОКОДЫ ==========
+    if call.data == "promo_menu":
+        bot.edit_message_text("<b>🎫 ПРОМОКОДЫ</b>\n\nВведи /promo КОД", cid, mid, reply_markup=promo_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "enter_promo":
+        bot.send_message(uid, "Введите промокод:")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: promo_enter_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== ЖАЛОБЫ ==========
+    if call.data == "report_menu":
+        bot.edit_message_text("<b>📝 ЖАЛОБА</b>\n\nВыберите тип жалобы:", cid, mid, reply_markup=report_menu_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data in ["report_player", "report_bug", "report_finance", "report_other"]:
+        types = {
+            "report_player": "на игрока",
+            "report_bug": "баг",
+            "report_finance": "финансы",
+            "report_other": "другое"
+        }
+        bot.send_message(uid, f"Опишите вашу жалобу ({types[call.data]}):")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: report_text_handler(m, call.data, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== НАСТРОЙКИ ЧАТОВ ==========
+    if call.data == "my_chats_settings":
+        bot.edit_message_text("<b>⚙️ НАСТРОЙКИ ЧАТОВ</b>\n\nВыбери чат:", cid, mid, reply_markup=my_chats_kb(uid))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data.startswith("chat_settings_"):
         tcid = int(call.data.split("_")[2])
         s = get_chat_settings(tcid)
-        if s["owner_id"] != uid and uid != ADMIN_ID: bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True); return
+        if s["owner_id"] != uid and uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True)
+            return
         kb, info = chat_settings_kb(tcid)
-        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML"); bot.answer_callback_query(call.id); return
+        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML")
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data.startswith("reset_stats_"):
         tcid = int(call.data.split("_")[2])
         s = get_chat_settings(tcid)
-        if s["owner_id"] != uid and uid != ADMIN_ID: bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True); return
+        if s["owner_id"] != uid and uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True)
+            return
         conn = sqlite3.connect("roulette.db")
         c = conn.cursor()
         c.execute("DELETE FROM chat_stats WHERE chat_id = ?", (tcid,))
         c.execute("INSERT INTO chat_stats (chat_id, total_games, total_bets, season_games, season_bets) VALUES (?, 0, 0, 0, 0)", (tcid,))
         c.execute("DELETE FROM chat_players WHERE chat_id = ?", (tcid,))
-        conn.commit(); conn.close()
+        conn.commit()
+        conn.close()
         bot.answer_callback_query(call.id, "✅ Статистика сброшена!", show_alert=True)
-        kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML"); return
-    if call.data.startswith("set_winner_bonus_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите бонус победителю (0-500 GC):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_winner_bonus_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("set_auto_kick_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите авто-кик в минутах (0-10):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_auto_kick_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("set_max_players_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите макс. игроков (2-15):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_max_players_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("set_min_bet_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите мин. ставку (1-1000):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_min_bet_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("set_max_bet_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите макс. ставку (10-10000):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_max_bet_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("set_bet_buttons_"): tcid = int(call.data.split("_")[3]); bot.send_message(uid, "Введите кнопки через запятую (10,50,100,200,500,1000):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: set_bet_buttons_handler(m, tcid, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data.startswith("toggle_game_"):
-        tcid = int(call.data.split("_")[2]); s = get_chat_settings(tcid); ns = 0 if s['game_enabled'] else 1; update_chat_settings(tcid, game_enabled=ns)
-        bot.answer_callback_query(call.id, f"Игры {'вкл' if ns else 'выкл'}"); kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML"); return
-    if call.data.startswith("toggle_admin_only_"):
-        tcid = int(call.data.split("_")[3]); s = get_chat_settings(tcid); ns = 0 if s['admin_only'] else 1; update_chat_settings(tcid, admin_only=ns)
-        bot.answer_callback_query(call.id, f"Только админы: {'Да' if ns else 'Нет'}"); kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML"); return
+        kb, info = chat_settings_kb(tcid)
+        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML")
+        return
+    
+    if call.data.startswith("toggle_drunk_"):
+        tcid = int(call.data.split("_")[2])
+        s = get_chat_settings(tcid)
+        if s["owner_id"] != uid and uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True)
+            return
+        new_val = 0 if s["drunk_shooter"] else 1
+        update_chat_settings(tcid, drunk_shooter=new_val)
+        bot.answer_callback_query(call.id, f"Пьяный стрелок {'включён' if new_val else 'выключен'}")
+        kb, info = chat_settings_kb(tcid)
+        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML")
+        return
+    
+    if call.data.startswith("toggle_hardcore_"):
+        tcid = int(call.data.split("_")[2])
+        s = get_chat_settings(tcid)
+        if s["owner_id"] != uid and uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True)
+            return
+        new_val = 0 if s["hardcore_allowed"] else 1
+        update_chat_settings(tcid, hardcore_allowed=new_val)
+        bot.answer_callback_query(call.id, f"Хардкор {'разрешён' if new_val else 'запрещён'}")
+        kb, info = chat_settings_kb(tcid)
+        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML")
+        return
+    
+    if call.data.startswith("toggle_shields_"):
+        tcid = int(call.data.split("_")[2])
+        s = get_chat_settings(tcid)
+        if s["owner_id"] != uid and uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Только владелец!", show_alert=True)
+            return
+        new_val = 0 if s["shields_allowed"] else 1
+        update_chat_settings(tcid, shields_allowed=new_val)
+        bot.answer_callback_query(call.id, f"Защиты {'разрешены' if new_val else 'запрещены'}")
+        kb, info = chat_settings_kb(tcid)
+        bot.edit_message_text(info, cid, mid, reply_markup=kb, parse_mode="HTML")
+        return
+    
+    # ========== АДМИН-ПАНЕЛЬ ==========
     if call.data == "admin_panel":
-        if uid != ADMIN_ID: bot.answer_callback_query(call.id, "❌ Доступ запрещен!", show_alert=True); return
-        bot.edit_message_text("<b>👑 АДМИН ПАНЕЛЬ</b>", cid, mid, reply_markup=admin_panel_kb()); bot.answer_callback_query(call.id); return
+        if uid != ADMIN_ID:
+            bot.answer_callback_query(call.id, "❌ Доступ запрещен!", show_alert=True)
+            return
+        bot.edit_message_text("<b>👑 АДМИН ПАНЕЛЬ</b>", cid, mid, reply_markup=admin_panel_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_stats":
         if uid != ADMIN_ID: return
-        st = get_total_stats(); se = get_current_season()
-        bot.edit_message_text(f"<b>📊 СТАТИСТИКА</b>\n\n📱 Чатов: {st['chats']}\n👥 Игроков: {st['users']}\n🎮 Игр: {st['games']}\n📅 Сезон #{se['number'] if se else '?'}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))); bot.answer_callback_query(call.id); return
+        st = get_total_stats()
+        se = get_current_season()
+        bot.edit_message_text(f"<b>📊 СТАТИСТИКА</b>\n\n📱 Чатов: {st['chats']}\n👥 Игроков: {st['users']}\n🎮 Игр: {st['games']}\n📅 Сезон #{se['number'] if se else '?'}", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_reports":
+        if uid != ADMIN_ID: return
+        reports = get_reports("new")
+        if not reports:
+            text = "📝 Новых жалоб нет"
+        else:
+            text = "<b>📝 НОВЫЕ ЖАЛОБЫ</b>\n\n"
+            for r in reports[:10]:
+                text += f"#{r[0]} | {r[2]} | от {get_name(r[1])}\n{r[3][:50]}...\n\n"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("📋 Все жалобы", callback_data="admin_all_reports"))
+        kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+        bot.edit_message_text(text, cid, mid, reply_markup=kb)
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_all_reports":
+        if uid != ADMIN_ID: return
+        reports = get_reports()
+        text = "<b>📝 ВСЕ ЖАЛОБЫ</b>\n\n"
+        for r in reports[:20]:
+            status_emoji = "🟡" if r[4] == "new" else "🟢" if r[4] == "done" else "🔵"
+            text += f"{status_emoji} #{r[0]} | {r[2]} | {get_name(r[1])}\n"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_reports"))
+        bot.edit_message_text(text, cid, mid, reply_markup=kb)
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_black_market":
+        if uid != ADMIN_ID: return
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🌑 Запустить сейчас", callback_data="admin_bm_start"))
+        kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+        bot.edit_message_text("<b>🌑 УПРАВЛЕНИЕ ЧЁРНЫМ РЫНКОМ</b>\n\nТекущее состояние: " + ("🟢 ОТКРЫТ" if black_market_active else "🔴 ЗАКРЫТ"), cid, mid, reply_markup=kb)
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_bm_start":
+        if uid != ADMIN_ID: return
+        start_black_market()
+        bot.answer_callback_query(call.id, "🌑 Чёрный рынок запущен на 15 минут!")
+        bot.edit_message_reply_markup(cid, mid, reply_markup=admin_panel_kb())
+        return
+    
+    if call.data == "admin_give_item":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите: ID ИГРОКА ТИП КОЛИЧЕСТВО\nТипы: gc, shield, diamond, double, insurance, blood_mark, reincarnation, silencer, fake_bullet, vip")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: give_item_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== ПРОМОКОДЫ АДМИН ==========
+    if call.data == "admin_promocodes":
+        if uid != ADMIN_ID: return
+        bot.edit_message_text("<b>🎫 ПРОМОКОДЫ</b>", cid, mid, reply_markup=admin_promocodes_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_create_promo":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите: КОД ТИП КОЛ-ВО ЛИМИТ [ДНИ]\nТипы: gc,shield,double,insurance,diamond_shield,vip,blood_mark,reincarnation,silencer,fake_bullet,all")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: create_promo_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_list_promos":
+        if uid != ADMIN_ID: return
+        pr = get_all_promos()
+        text = "<b>📋 ПРОМОКОДЫ</b>\n\n"
+        for cd, rt, ra, mu, uc, exp, pcid, puid, disc, is_rand in pr:
+            st = "✅" if not exp or datetime.now() < datetime.fromisoformat(exp) else "❌"
+            text += f"{st} {cd} — {rt} x{ra} ({uc}/{mu})\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_promocodes")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_delete_promo":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите код промокода:")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: delete_promo_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_promo_chat":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите: ID_ЧАТА КОД ТИП КОЛ-ВО ЛИМИТ ДНИ")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: promo_chat_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_promo_user":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите: ID_ИГРОКА КОД ТИП КОЛ-ВО")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: promo_user_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_promo_random":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите: КОД ЛИМИТ ДНИ")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: promo_random_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== АДМИН ОСТАЛЬНОЕ ==========
+    if call.data == "admin_broadcast":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите текст рассылки:")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: broadcast_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_add_gc":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите ID и GC (123456789 500):")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: add_gc_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "admin_remove_gc":
+        if uid != ADMIN_ID: return
+        bot.send_message(uid, "Введите ID и GC для списания (123456789 100):")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: remove_gc_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_chats":
         if uid != ADMIN_ID: return
         conn = sqlite3.connect("roulette.db")
@@ -888,64 +1535,84 @@ def handle_callback(call):
         ch = c.fetchall()
         conn.close()
         text = "<b>📋 СПИСОК ЧАТОВ</b>\n\n"
-        for cid2, nm, oid, en in ch[:30]: text += f"{'✅' if en else '❌'} {nm or cid2}\n   ID: {cid2}\n   Владелец: {get_name(oid) if oid else '?'}\n\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))); bot.answer_callback_query(call.id); return
+        for cid2, nm, oid, en in ch[:30]:
+            text += f"{'✅' if en else '❌'} {nm or cid2}\n   ID: {cid2}\n   Владелец: {get_name(oid) if oid else '?'}\n\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_players":
         if uid != ADMIN_ID: return
         us = get_all_users()
         text = "<b>👥 ТОП-50 ИГРОКОВ</b>\n\n"
-        for i,(uid2,gc,r,w,b) in enumerate(us[:30],1): text += f"{i}. {'🚫' if b else '✅'} {get_name(uid2)} — {get_rank_emoji(r)} {r}, {gc} GC, {w} побед\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))); bot.answer_callback_query(call.id); return
-    if call.data == "admin_promocodes":
-        if uid != ADMIN_ID: return
-        bot.edit_message_text("<b>🎫 ПРОМОКОДЫ</b>", cid, mid, reply_markup=admin_promocodes_kb()); bot.answer_callback_query(call.id); return
-    if call.data == "admin_create_promo":
-        if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите: КОД ТИП КОЛ-ВО ЛИМИТ [ДНИ]\nТипы: gc,shield,double,insurance,diamond_shield,vip"); bot.register_next_step_handler_by_chat_id(uid, lambda m: create_promo_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data == "admin_list_promos":
-        if uid != ADMIN_ID: return
-        pr = get_all_promos()
-        text = "<b>📋 ПРОМОКОДЫ</b>\n\n"
-        for cd, rt, ra, mu, uc, ex in pr:
-            st = "✅" if not ex or datetime.now() < datetime.fromisoformat(ex) else "❌"
-            text += f"{st} {cd} — {rt} x{ra} ({uc}/{mu})\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_promocodes"))); bot.answer_callback_query(call.id); return
-    if call.data == "admin_delete_promo":
-        if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите код промокода:"); bot.register_next_step_handler_by_chat_id(uid, lambda m: delete_promo_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data == "admin_broadcast":
-        if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите текст рассылки:"); bot.register_next_step_handler_by_chat_id(uid, lambda m: broadcast_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
+        for i,(uid2,gc,r,w,b) in enumerate(us[:30],1):
+            text += f"{i}. {'🚫' if b else '✅'} {get_name(uid2)} — {get_rank_emoji(r)} {r}, {gc} GC, {w} побед\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_games":
         if uid != ADMIN_ID: return
-        if not games: text = "Нет активных игр"
+        if not games:
+            text = "Нет активных игр"
         else:
             text = "<b>🎮 АКТИВНЫЕ ИГРЫ</b>\n\n"
-            for gid2, g in games.items(): text += f"📌 {get_chat_name(gid2)}\n   {len(g['players'])}/{g['max_players']} | {g['status']}\n\n"
-        kb = InlineKeyboardMarkup(); kb.add(InlineKeyboardButton("⏹️ Завершить все", callback_data="admin_end_all_games"), InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
-        bot.edit_message_text(text, cid, mid, reply_markup=kb); bot.answer_callback_query(call.id); return
+            for gid2, g in games.items():
+                text += f"📌 {get_chat_name(gid2)}\n   {len(g['players'])}/{g['max_players']} | {g['status']}\n\n"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("⏹️ Завершить все", callback_data="admin_end_all_games"))
+        kb.add(InlineKeyboardButton("🔙 Назад", callback_data="admin_panel"))
+        bot.edit_message_text(text, cid, mid, reply_markup=kb)
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_end_all_games":
         if uid != ADMIN_ID: return
-        for gid2 in list(games.keys()): del games[gid2]; cancel_auto_kick_timers(gid2)
-        bot.answer_callback_query(call.id, "Все игры завершены"); bot.edit_message_reply_markup(cid, mid, reply_markup=admin_panel_kb()); return
+        for gid2 in list(games.keys()):
+            del games[gid2]
+            cancel_auto_kick_timers(gid2)
+        bot.answer_callback_query(call.id, "Все игры завершены")
+        bot.edit_message_reply_markup(cid, mid, reply_markup=admin_panel_kb())
+        return
+    
     if call.data == "admin_season_menu":
         if uid != ADMIN_ID: return
-        bot.edit_message_text("<b>📅 УПРАВЛЕНИЕ СЕЗОНОМ</b>", cid, mid, reply_markup=admin_season_kb()); bot.answer_callback_query(call.id); return
+        bot.edit_message_text("<b>📅 УПРАВЛЕНИЕ СЕЗОНОМ</b>", cid, mid, reply_markup=admin_season_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_season_info":
         if uid != ADMIN_ID: return
         se = get_current_season()
-        if se: dl = (datetime.fromisoformat(se['end_date'])-datetime.now()).days; text = f"<b>📅 СЕЗОН #{se['number']}</b>\n\nНачало: {se['start_date'][:10]}\nКонец: {se['end_date'][:10]}\nОсталось: {dl} дней"
-        else: text = "Нет активного сезона"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_season_menu"))); bot.answer_callback_query(call.id); return
+        if se:
+            dl = (datetime.fromisoformat(se['end_date'])-datetime.now()).days
+            text = f"<b>📅 СЕЗОН #{se['number']}</b>\n\nНачало: {se['start_date'][:10]}\nКонец: {se['end_date'][:10]}\nОсталось: {dl} дней"
+        else:
+            text = "Нет активного сезона"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_season_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_season_end":
         if uid != ADMIN_ID: return
-        give_season_rewards(); bot.answer_callback_query(call.id, "✅ Сезон завершён!"); bot.edit_message_reply_markup(cid, mid, reply_markup=admin_season_kb()); return
+        give_season_rewards()
+        bot.answer_callback_query(call.id, "✅ Сезон завершён!")
+        bot.edit_message_reply_markup(cid, mid, reply_markup=admin_season_kb())
+        return
+    
     if call.data == "admin_season_give":
         if uid != ADMIN_ID: return
-        give_season_rewards(); bot.answer_callback_query(call.id, "✅ Награды выданы!"); bot.edit_message_reply_markup(cid, mid, reply_markup=admin_season_kb()); return
+        give_season_rewards()
+        bot.answer_callback_query(call.id, "✅ Награды выданы!")
+        bot.edit_message_reply_markup(cid, mid, reply_markup=admin_season_kb())
+        return
+    
     if call.data == "admin_ranks_menu":
         if uid != ADMIN_ID: return
-        bot.edit_message_text("<b>🎖️ УПРАВЛЕНИЕ РАНГАМИ</b>", cid, mid, reply_markup=admin_ranks_kb()); bot.answer_callback_query(call.id); return
+        bot.edit_message_text("<b>🎖️ УПРАВЛЕНИЕ РАНГАМИ</b>", cid, mid, reply_markup=admin_ranks_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_ranks_view":
         if uid != ADMIN_ID: return
         conn = sqlite3.connect("roulette.db")
@@ -954,51 +1621,131 @@ def handle_callback(call):
         rk = c.fetchall()
         conn.close()
         text = "<b>📊 РАНГИ</b>\n\n"
-        for rn, mn, mx, rg, bb in rk: text += f"{rn}: {mn}-{mx}\n   🎁 {rg} GC | 📈 +{bb}\n\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_ranks_menu"))); bot.answer_callback_query(call.id); return
+        for rn, mn, mx, rg, bb in rk:
+            text += f"{rn}: {mn}-{mx}\n   🎁 {rg} GC | 📈 +{bb}\n\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_ranks_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_ranks_edit":
         if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите пороги:\nСтрелок:500,Опытный:1000,Мастер:1500,Элита:2000,Легенда:2500"); bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_ranks_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
+        bot.send_message(uid, "Введите пороги:\nСтрелок:500,Опытный:1000,Мастер:1500,Элита:2000,Легенда:2500")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_ranks_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_ranks_rewards":
         if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите награды:\nСтрелок:500,Опытный:1000,Мастер:2000,Элита:4000,Легенда:8000"); bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_rank_rewards_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
+        bot.send_message(uid, "Введите награды:\nСтрелок:500,Опытный:1000,Мастер:2000,Элита:4000,Легенда:8000")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_rank_rewards_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_ranks_coeff":
         if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите коэффициенты:\nПобеда:25,Поражение:15"); bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_rank_coeff_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
+        bot.send_message(uid, "Введите коэффициенты:\nПобеда:25,Поражение:15")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: edit_rank_coeff_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_ranks_reset":
         if uid != ADMIN_ID: return
         conn = sqlite3.connect("roulette.db")
         c = conn.cursor()
         c.execute("DELETE FROM rank_settings")
         dr = [("Новичок",0,499,100,0,0,0,0,0,0,0,0,0,0,0,0,25,15),("Стрелок",500,999,500,1,0,0,0,0,50,100,0,0,0,0,0,25,15),("Опытный",1000,1499,1000,0,1,0,0,0,100,250,0,0,0,0,0,25,15),("Мастер",1500,1999,2000,0,0,1,0,0,200,500,1,0,0,0,0,25,15),("Элита",2000,2499,4000,0,0,0,1,0,500,1000,0,1,0,0,0,25,15),("Легенда",2500,999999,8000,0,0,0,1,14,1000,2000,0,0,1,3,0,25,15)]
-        for r in dr: c.execute("INSERT INTO rank_settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
-        conn.commit(); conn.close()
-        bot.answer_callback_query(call.id, "✅ Сброшено!"); bot.edit_message_reply_markup(cid, mid, reply_markup=admin_ranks_kb()); return
+        for r in dr:
+            c.execute("INSERT INTO rank_settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", r)
+        conn.commit()
+        conn.close()
+        bot.answer_callback_query(call.id, "✅ Сброшено!")
+        bot.edit_message_reply_markup(cid, mid, reply_markup=admin_ranks_kb())
+        return
+    
     if call.data == "admin_chat_rating_menu":
         if uid != ADMIN_ID: return
-        bot.edit_message_text("<b>🏆 РЕЙТИНГ ЧАТОВ</b>", cid, mid, reply_markup=admin_chat_rating_kb()); bot.answer_callback_query(call.id); return
+        bot.edit_message_text("<b>🏆 РЕЙТИНГ ЧАТОВ</b>", cid, mid, reply_markup=admin_chat_rating_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_chat_top":
         if uid != ADMIN_ID: return
         ch = get_all_chats_rating()
         text = "<b>🏆 ТОП-50 ЧАТОВ</b>\n\n"
-        for i,(cid2,g,b) in enumerate(ch[:50],1): r = (g*10)+(b//10); text += f"{i}. {get_chat_name(cid2)}\n   📊 {r} | 🎮 {g} | 💰 {b}\n\n"
-        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_chat_rating_menu"))); bot.answer_callback_query(call.id); return
+        for i,(cid2,g,b) in enumerate(ch[:50],1):
+            r = (g*10)+(b//10)
+            text += f"{i}. {get_chat_name(cid2)}\n   📊 {r} | 🎮 {g} | 💰 {b}\n\n"
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="admin_chat_rating_menu")))
+        bot.answer_callback_query(call.id)
+        return
+    
     if call.data == "admin_chat_reset":
         if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите ID чата:"); bot.register_next_step_handler_by_chat_id(uid, lambda m: reset_chat_rating_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data == "admin_add_gc":
-        if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите ID и GC (123456789 500):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: add_gc_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
-    if call.data == "admin_remove_gc":
-        if uid != ADMIN_ID: return
-        bot.send_message(uid, "Введите ID и GC для списания (123456789 100):"); bot.register_next_step_handler_by_chat_id(uid, lambda m: remove_gc_handler(m, cid, mid)); bot.answer_callback_query(call.id); return
+        bot.send_message(uid, "Введите ID чата:")
+        bot.register_next_step_handler_by_chat_id(uid, lambda m: reset_chat_rating_handler(m, cid, mid))
+        bot.answer_callback_query(call.id)
+        return
     
-    # ВЫБОР РЕЖИМА
+    # ========== ЧЁРНЫЙ РЫНОК ==========
+    if call.data == "black_market":
+        if not black_market_active:
+            bot.answer_callback_query(call.id, "🌑 Чёрный рынок закрыт! Загляни позже.", show_alert=True)
+            return
+        items = get_black_market_items()
+        if not items:
+            bot.edit_message_text("🌑 На Чёрном рынке сейчас пусто... Загляни позже.", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        else:
+            text = "<b>🌑 ЧЁРНЫЙ РЫНОК</b>\n\nСтарик Гром шепчет: «Забирай, пока есть время...»\n\n"
+            for i, item in enumerate(items):
+                item_name, item_type, price, rarity, effect, effect_value = item
+                emoji = "🟢" if rarity == "обычный" else "🟣" if rarity == "редкий" else "🟠" if rarity == "эпический" else "🔴"
+                text += f"{emoji} <b>{item_name}</b> — {price} GC\n"
+                text += f"   <i>{effect_value} x {item_type}</i>\n\n"
+            bot.edit_message_text(text, cid, mid, reply_markup=black_market_kb())
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data.startswith("bm_buy_"):
+        if not black_market_active:
+            bot.answer_callback_query(call.id, "🌑 Чёрный рынок уже закрыт!", show_alert=True)
+            return
+        idx = int(call.data.split("_")[2])
+        success, msg = purchase_black_market_item(uid, idx)
+        bot.answer_callback_query(call.id, msg, show_alert=True)
+        if success:
+            bot.edit_message_text(f"✅ {msg}\n\n💰 Новый баланс: {get_user(uid)['gc']} GC", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        return
+    
+    # ========== АКТИВНЫЕ ИГРЫ И ИСТОРИЯ ==========
+    if call.data == "active_games":
+        user_games = []
+        for gid, g in games.items():
+            if uid in g["players"] and g["status"] == "playing":
+                user_games.append(f"📌 Чат: {get_chat_name(gid)}\n   Статус: игра идёт\n   Твой ход: {'✅' if g['current_player'] == uid else '❌'}")
+        if not user_games:
+            text = "🎮 Вы не участвуете ни в одной активной игре"
+        else:
+            text = "<b>🎮 ВАШИ АКТИВНЫЕ ИГРЫ</b>\n\n" + "\n\n".join(user_games)
+        bot.edit_message_text(text, cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    if call.data == "game_history":
+        # Здесь можно добавить историю игр из БД
+        bot.edit_message_text("📜 <b>ИСТОРИЯ ИГР</b>\n\nСкоро здесь будут ваши последние 10 игр!", cid, mid, reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("🔙 Назад", callback_data="back")))
+        bot.answer_callback_query(call.id)
+        return
+    
+    # ========== ВЫБОР РЕЖИМА ==========
     if call.data == "mode_arcade":
         cid = call.message.chat.id
-        if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
+        if cid in games:
+            bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True)
+            return
         s = get_chat_settings(cid)
-        if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
+        if s["banned"] or not s['game_enabled']:
+            bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True)
+            return
         msg = bot.send_message(cid, MODE_STORIES["arcade"].replace("{name}", get_name(uid)))
         delete_message_later(cid, msg.message_id, 6)
         sent = bot.send_message(cid, f"🎮 <b>НОВАЯ ИГРА!</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
@@ -1015,9 +1762,16 @@ def handle_callback(call):
     
     if call.data == "mode_hardcore_ban":
         cid = call.message.chat.id
-        if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
+        if cid in games:
+            bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True)
+            return
         s = get_chat_settings(cid)
-        if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
+        if not s["hardcore_allowed"]:
+            bot.answer_callback_query(call.id, "❌ Хардкор запрещён настройками чата!", show_alert=True)
+            return
+        if s["banned"] or not s['game_enabled']:
+            bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True)
+            return
         sent = bot.send_message(cid, f"💀 <b>ХАРДКОР ИГРА (С БАНОМ)</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
         games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"hardcore","hardcore_ban":True,"lives":{uid:1}}
         bot.send_message(uid, "✅ Сделай ставку:", reply_markup=bet_kb(cid))
@@ -1027,9 +1781,16 @@ def handle_callback(call):
     
     if call.data == "mode_hardcore_noban":
         cid = call.message.chat.id
-        if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
+        if cid in games:
+            bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True)
+            return
         s = get_chat_settings(cid)
-        if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
+        if not s["hardcore_allowed"]:
+            bot.answer_callback_query(call.id, "❌ Хардкор запрещён настройками чата!", show_alert=True)
+            return
+        if s["banned"] or not s['game_enabled']:
+            bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True)
+            return
         sent = bot.send_message(cid, f"💀 <b>ХАРДКОР ИГРА (БЕЗ БАНА)</b>\n\n{get_user_link(uid)} создал лобби!\nМакс: {s['max_players']}\nМин ставка: {s['min_bet']} GC\n\n{random.choice(GAME_START_STORIES).replace('{name}', get_name(uid))}", reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton("➕ Присоединиться", callback_data=f"join_{cid}")))
         games[cid] = {"players":[uid],"bets":{},"chambers":{},"status":"waiting","current_player":None,"creator":uid,"message_id":sent.message_id,"max_players":s['max_players'],"used_shields":{},"used_double":{},"used_insurance":{},"mode":"hardcore","hardcore_ban":False,"lives":{uid:1}}
         bot.send_message(uid, "✅ Сделай ставку:", reply_markup=bet_kb(cid))
@@ -1038,17 +1799,32 @@ def handle_callback(call):
         return
     
     if call.data == "create_game":
-        if is_private: bot.answer_callback_query(call.id, "❌ Игры только в чатах!", show_alert=True); return
+        if is_private:
+            bot.answer_callback_query(call.id, "❌ Игры только в чатах!", show_alert=True)
+            return
         s = get_chat_settings(cid)
-        if s["banned"] or not s['game_enabled']: bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True); return
-        if cid in games: bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True); return
-        bot.send_message(cid, f"{get_user_link(uid)} создаёт игру. Выберите режим:", reply_markup=mode_choice_kb()); bot.answer_callback_query(call.id); return
+        if s["banned"] or not s['game_enabled']:
+            bot.answer_callback_query(call.id, "❌ Игры отключены!", show_alert=True)
+            return
+        if cid in games:
+            bot.answer_callback_query(call.id, "❌ Игра уже есть!", show_alert=True)
+            return
+        bot.send_message(cid, f"{get_user_link(uid)} создаёт игру. Выберите режим:", reply_markup=mode_choice_kb())
+        bot.answer_callback_query(call.id)
+        return
     
+    # ========== ПРИСОЕДИНЕНИЕ К ИГРЕ ==========
     if call.data.startswith("join_"):
         gid = int(call.data.split("_")[1])
-        if gid not in games or games[gid]["status"] != "waiting": bot.answer_callback_query(call.id, "Игра уже началась!", show_alert=True); return
-        if uid in games[gid]["players"]: bot.answer_callback_query(call.id, "Ты уже в игре!", show_alert=True); return
-        if len(games[gid]["players"]) >= games[gid]["max_players"]: bot.answer_callback_query(call.id, "Лобби заполнено!", show_alert=True); return
+        if gid not in games or games[gid]["status"] != "waiting":
+            bot.answer_callback_query(call.id, "Игра уже началась!", show_alert=True)
+            return
+        if uid in games[gid]["players"]:
+            bot.answer_callback_query(call.id, "Ты уже в игре!", show_alert=True)
+            return
+        if len(games[gid]["players"]) >= games[gid]["max_players"]:
+            bot.answer_callback_query(call.id, "Лобби заполнено!", show_alert=True)
+            return
         games[gid]["players"].append(uid)
         games[gid]["lives"][uid] = 3 if games[gid]["mode"] == "arcade" else 1
         update_lobby_message(gid)
@@ -1056,27 +1832,44 @@ def handle_callback(call):
         delete_message_later(gid, msg.message_id, 6)
         bot.send_message(uid, "🎮 Сделай ставку:", reply_markup=bet_kb(gid))
         start_auto_kick_timer(gid, uid)
-        bot.answer_callback_query(call.id, "Ты присоединился!"); return
+        bot.answer_callback_query(call.id, "Ты присоединился!")
+        return
     
     if call.data.startswith("cancel_game_"):
         gid = int(call.data.split("_")[2])
-        if gid not in games: return
-        if games[gid]["creator"] != uid and not is_chat_admin(uid, gid): bot.answer_callback_query(call.id, "Только создатель!", show_alert=True); return
+        if gid not in games:
+            return
+        if games[gid]["creator"] != uid and not is_chat_admin(uid, gid):
+            bot.answer_callback_query(call.id, "Только создатель!", show_alert=True)
+            return
         cancel_auto_kick_timers(gid)
         del games[gid]
         msg = bot.send_message(gid, "❌ Игра отменена")
         delete_message_later(gid, msg.message_id, 6)
-        bot.answer_callback_query(call.id, "Игра отменена"); return
+        bot.answer_callback_query(call.id, "Игра отменена")
+        return
     
+    # ========== СТАВКИ ==========
     if call.data.startswith("place_bet_"):
         parts = call.data.split("_")
-        gid = int(parts[2]); bet = int(parts[3])
-        if gid not in games or games[gid]["status"] != "waiting": bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True); return
-        if uid not in games[gid]["players"]: bot.answer_callback_query(call.id, "Ты не в игре!", show_alert=True); return
-        if uid in games[gid]["bets"]: bot.answer_callback_query(call.id, "Ставка уже сделана!", show_alert=True); return
+        gid = int(parts[2])
+        bet = int(parts[3])
+        if gid not in games or games[gid]["status"] != "waiting":
+            bot.answer_callback_query(call.id, "Игра неактивна!", show_alert=True)
+            return
+        if uid not in games[gid]["players"]:
+            bot.answer_callback_query(call.id, "Ты не в игре!", show_alert=True)
+            return
+        if uid in games[gid]["bets"]:
+            bot.answer_callback_query(call.id, "Ставка уже сделана!", show_alert=True)
+            return
         s = get_chat_settings(gid)
-        if bet < s['min_bet'] or bet > s['max_bet']: bot.answer_callback_query(call.id, f"Ставка от {s['min_bet']} до {s['max_bet']}!", show_alert=True); return
-        if u["gc"] < bet: bot.answer_callback_query(call.id, f"Не хватает! Нужно {bet}", show_alert=True); return
+        if bet < s['min_bet'] or bet > s['max_bet']:
+            bot.answer_callback_query(call.id, f"Ставка от {s['min_bet']} до {s['max_bet']}!", show_alert=True)
+            return
+        if u["gc"] < bet:
+            bot.answer_callback_query(call.id, f"Не хватает! Нужно {bet}", show_alert=True)
+            return
         games[gid]["bets"][uid] = bet
         update_user(uid, gc=u["gc"]-bet)
         msg = bot.send_message(gid, f"💰 {get_name(uid)} поставил {bet} GC!")
@@ -1084,22 +1877,30 @@ def handle_callback(call):
         bot.send_message(uid, f"✅ Ставка {bet} GC принята!")
         cancel_auto_kick_timers(gid)
         update_lobby_message(gid)
-        bot.answer_callback_query(call.id, f"Ставка {bet} GC принята!"); return
+        bot.answer_callback_query(call.id, f"Ставка {bet} GC принята!")
+        return
     
+    # ========== СТАРТ ИГРЫ ==========
     if call.data.startswith("start_game_"):
         gid = int(call.data.split("_")[2])
-        if gid not in games: return
+        if gid not in games:
+            return
         g = games[gid]
-        if uid != g["creator"]: bot.answer_callback_query(call.id, "Только создатель!", show_alert=True); return
-        if len(g["players"]) < 2: bot.answer_callback_query(call.id, "Нужно минимум 2 игрока!", show_alert=True); return
+        if uid != g["creator"]:
+            bot.answer_callback_query(call.id, "Только создатель!", show_alert=True)
+            return
+        if len(g["players"]) < 2:
+            bot.answer_callback_query(call.id, "Нужно минимум 2 игрока!", show_alert=True)
+            return
         for p in g["players"]:
-            if p not in g["bets"]: bot.answer_callback_query(call.id, "Не все сделали ставки!", show_alert=True); return
+            if p not in g["bets"]:
+                bot.answer_callback_query(call.id, "Не все сделали ставки!", show_alert=True)
+                return
         g["status"] = "playing"
         players = g["players"].copy()
         random.shuffle(players)
         g["players"] = players
         g["current_player"] = players[0]
-        # Заряжаем револьвер: 6 гнёзд, 1 патрон
         for p in players:
             g["chambers"][p] = random.randint(1, 6)
         total = sum(g["bets"].values())
@@ -1110,12 +1911,15 @@ def handle_callback(call):
         msg = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid))
         g["action_message_id"] = msg.message_id
         update_chat_stats(gid, total)
-        for p in players: u2 = get_user(p); update_user(p, total_games=u2["total_games"]+1)
-        bot.answer_callback_query(call.id, "Игра начата!"); return
+        for p in players:
+            u2 = get_user(p)
+            update_user(p, total_games=u2["total_games"]+1)
+        bot.answer_callback_query(call.id, "Игра начата!")
+        return
     
     # ========== ИГРОВЫЕ ДЕЙСТВИЯ ==========
     if call.data.startswith("game_spin_"):
-        if not check_game_cooldown(uid): 
+        if not check_game_cooldown(uid):
             bot.answer_callback_query(call.id, "⏰ Подожди 3 секунды!", show_alert=True)
             return
         
@@ -1140,7 +1944,6 @@ def handle_callback(call):
         except:
             pass
         
-        # Сбрасываем chamber после прокрутки
         g["chambers"][uid] = random.randint(1, 6)
         delete_message_later(gid, call.message.message_id, 4)
         
@@ -1151,7 +1954,7 @@ def handle_callback(call):
         return
     
     if call.data.startswith("game_shoot_"):
-        if not check_game_cooldown(uid): 
+        if not check_game_cooldown(uid):
             bot.answer_callback_query(call.id, "⏰ Подожди 3 секунды!", show_alert=True)
             return
         
@@ -1171,12 +1974,20 @@ def handle_callback(call):
         bet = g["bets"][uid]
         chamber = g["chambers"][uid]
         
-        # Выстрел: пуля попадает если chamber == 1
+        # Пьяный стрелок
+        s = get_chat_settings(gid)
+        drunk_shot = False
+        drunk_target = None
+        if s["drunk_shooter"] and random.randint(1, 100) <= s["drunk_shooter_chance"] and len(g["players"]) > 1:
+            drunk_shot = True
+            other_players = [p for p in g["players"] if p != uid]
+            drunk_target = random.choice(other_players)
+        
         is_dead = (chamber == 1)
         
-        # Применяем защиты ТОЛЬКО в аркадном режиме
-        if is_dead and g["mode"] == "arcade":
-            if u2["shields"] > 0 and g["used_shields"].get(uid,0) == 0:
+        # Применяем защиты только в аркадном режиме и если не пьяный выстрел
+        if not drunk_shot and is_dead and g["mode"] == "arcade" and s["shields_allowed"]:
+            if u2["shields"] > 0 and g["used_shields"].get(uid, 0) == 0:
                 is_dead = False
                 g["used_shields"][uid] = 1
                 update_user(uid, shields=u2["shields"]-1)
@@ -1186,28 +1997,85 @@ def handle_callback(call):
                 update_user(uid, diamond_shield=u2["diamond_shield"]-1)
                 bot.send_message(uid, "💎 АЛМАЗНЫЙ ЩИТ!")
         
+        # Кровавая метка
+        if not drunk_shot and u2["blood_mark"] > 0 and is_dead:
+            # Если есть кровавая метка — можно не использовать, но она даёт гарантию убийства
+            pass
+        
+        if drunk_shot:
+            # Пьяный выстрел в другого игрока
+            victim = drunk_target
+            victim_data = get_user(victim)
+            story = random.choice(DRUNK_STORIES).replace("{name}", get_name(uid)).replace("{victim}", get_name(victim))
+            bot.edit_message_text(f"💀 {story}", gid, call.message.message_id, parse_mode="HTML")
+            delete_message_later(gid, call.message.message_id, 6)
+            
+            # Жертва умирает
+            g["lives"][victim] -= 1
+            if g["lives"][victim] <= 0:
+                g["players"].remove(victim)
+                update_user(victim, losses=victim_data["losses"]+1)
+                update_rating_and_rewards(victim, False)
+                update_chat_player(gid, victim, False)
+                bot.send_message(gid, f"💀 {get_name(victim)} ВЫБЫЛ!")
+            
+            if len(g["players"]) <= 1:
+                winner = g["players"][0]
+                total = sum(g["bets"].values())
+                win = get_user(winner)
+                vm = get_vip_multiplier(winner)
+                win_amt = int(total * vm)
+                if s["winner_bonus"] > 0:
+                    win_amt += s["winner_bonus"]
+                update_user(winner, gc=win["gc"]+win_amt, wins=win["wins"]+1)
+                update_rating_and_rewards(winner, True)
+                add_gc(winner, 5)
+                update_chat_player(gid, winner, True)
+                win_story = random.choice(WIN_STORIES).replace("{name}", get_name(winner)).replace("{win}", str(win_amt))
+                bot.send_message(gid, f"🏆 ПОБЕДИТЕЛЬ: {get_name(winner)}\n💰 Выигрыш: {win_amt} GC\n\n{win_story}")
+                del games[gid]
+                bot.answer_callback_query(call.id, "Ты никого не убил, но игра закончена")
+                return
+            else:
+                idx = g["players"].index(uid)
+                next_idx = (idx + 1) % len(g["players"])
+                g["current_player"] = g["players"][next_idx]
+                cur = g["current_player"]
+                msg2 = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid))
+                g["action_message_id"] = msg2.message_id
+                bot.answer_callback_query(call.id, "Пьяный выстрел!")
+                return
+        
         if is_dead:
             refund = 0
-            if u2["insurance"] > 0 and g["used_insurance"].get(uid,0) == 0 and g["mode"] == "arcade":
+            if u2["insurance"] > 0 and g["used_insurance"].get(uid, 0) == 0 and g["mode"] == "arcade" and s["shields_allowed"]:
                 refund = bet // 2
                 g["used_insurance"][uid] = 1
                 update_user(uid, insurance=u2["insurance"]-1)
                 bot.send_message(uid, f"💰 СТРАХОВКА! +{refund} GC")
             
+            # Реинкарнация
+            if u2["reincarnation"] > 0 and g["mode"] == "arcade":
+                update_user(uid, reincarnation=u2["reincarnation"]-1)
+                story = random.choice(REINCARNATION_STORIES).replace("{name}", get_name(uid))
+                bot.edit_message_text(f"🔄 {story}", gid, call.message.message_id, parse_mode="HTML")
+                delete_message_later(gid, call.message.message_id, 6)
+                g["chambers"][uid] = random.randint(1, 6)
+                next_turn_with_delay(gid, g, 3)
+                bot.answer_callback_query(call.id, "Ты воскрес!")
+                return
+            
             g["lives"][uid] -= 1
             
             if g["lives"][uid] > 0:
-                # Потеря жизни, но остался в игре
                 story = random.choice(MISS_STORIES).replace("{name}", get_name(uid))
                 bot.edit_message_text(f"💀 {get_name(uid)} нажал на курок...\n\n{story}\n\n❤️ Осталось жизней: {g['lives'][uid]}\n💰 Банк: {sum(g['bets'].values())} GC", gid, call.message.message_id, parse_mode="HTML")
                 delete_message_later(gid, call.message.message_id, 6)
-                # Перезаряжаем chamber для следующего хода (пуля снова 1/6)
                 g["chambers"][uid] = random.randint(1, 6)
                 next_turn_with_delay(gid, g, 3)
                 bot.answer_callback_query(call.id, "Ты потерял жизнь!")
                 return
             else:
-                # Игрок выбыл окончательно
                 story = random.choice(DEATH_STORIES).replace("{name}", get_name(uid))
                 bot.edit_message_text(f"💀 {get_name(uid)} нажал на курок...\n\n{story}\n\n💀 {get_name(uid)} ВЫБЫЛ!", gid, call.message.message_id, parse_mode="HTML")
                 delete_message_later(gid, call.message.message_id, 6)
@@ -1231,8 +2099,8 @@ def handle_callback(call):
                     win = get_user(winner)
                     vm = get_vip_multiplier(winner)
                     win_amt = int(total * vm)
-                    s2 = get_chat_settings(gid)
-                    if s2["winner_bonus"] > 0: win_amt += s2["winner_bonus"]
+                    if s["winner_bonus"] > 0:
+                        win_amt += s["winner_bonus"]
                     update_user(winner, gc=win["gc"]+win_amt, wins=win["wins"]+1)
                     update_rating_and_rewards(winner, True)
                     add_gc(winner, 5)
@@ -1243,7 +2111,6 @@ def handle_callback(call):
                     bot.answer_callback_query(call.id, "Ты выбыл")
                     return
                 
-                # Передаём ход следующему
                 g["current_player"] = g["players"][0]
                 cur = g["current_player"]
                 total = sum(g["bets"].values())
@@ -1254,16 +2121,45 @@ def handle_callback(call):
                 bot.answer_callback_query(call.id, "Ты выбыл")
                 return
         else:
-            # Безопасный выстрел
+            # Глушитель
+            if u2["silencer"] > 0:
+                update_user(uid, silencer=u2["silencer"]-1)
+                story = random.choice(SILENCER_STORIES).replace("{name}", get_name(uid))
+                bot.edit_message_text(f"🔇 {story}", gid, call.message.message_id, parse_mode="HTML")
+                delete_message_later(gid, call.message.message_id, 6)
+                g["chambers"][uid] = random.randint(1, 6)
+                idx = g["players"].index(uid)
+                next_idx = (idx + 1) % len(g["players"])
+                g["current_player"] = g["players"][next_idx]
+                cur = g["current_player"]
+                msg2 = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid))
+                g["action_message_id"] = msg2.message_id
+                bot.answer_callback_query(call.id, "Глушитель! Никто не услышал выстрел")
+                return
+            
+            # Фальшивая пуля
+            if u2["fake_bullet"] > 0:
+                update_user(uid, fake_bullet=u2["fake_bullet"]-1)
+                story = random.choice(FAKE_BULLET_STORIES).replace("{name}", get_name(uid))
+                bot.edit_message_text(f"💀 {story}", gid, call.message.message_id, parse_mode="HTML")
+                delete_message_later(gid, call.message.message_id, 6)
+                g["chambers"][uid] = random.randint(1, 6)
+                idx = g["players"].index(uid)
+                next_idx = (idx + 1) % len(g["players"])
+                g["current_player"] = g["players"][next_idx]
+                cur = g["current_player"]
+                msg2 = bot.send_message(gid, f"🔫 <b>ХОД:</b> {get_name(cur)} | <b>Ставка:</b> {g['bets'][cur]} GC\n\nВыбери действие:", reply_markup=game_action_kb(gid))
+                g["action_message_id"] = msg2.message_id
+                bot.answer_callback_query(call.id, "Фальшивая пуля! Все думали, что ты выстрелил")
+                return
+            
+            # Обычный безопасный выстрел
             story = random.choice(MISS_STORIES).replace("{name}", get_name(uid))
             bot.edit_message_text(f"🍀 {get_name(uid)} нажал на курок...\n\n{story}\n\n💰 Банк: {sum(g['bets'].values())} GC", gid, call.message.message_id, parse_mode="HTML")
             delete_message_later(gid, call.message.message_id, 6)
             
-            # Перезаряжаем chamber для следующего хода
             g["chambers"][uid] = random.randint(1, 6)
             
-            # Проверка на окончание патронов в хардкоре (не актуально, т.к. каждый раз 1/6)
-            # Просто передаём ход
             idx = g["players"].index(uid)
             next_idx = (idx + 1) % len(g["players"])
             g["current_player"] = g["players"][next_idx]
@@ -1275,21 +2171,33 @@ def handle_callback(call):
             bot.answer_callback_query(call.id, "Пусто! Ты выжил")
             return
 
-# ========== ОБРАБОТЧИКИ НАСТРОЕК ==========
+# ========== ОБРАБОТЧИКИ ==========
 def promo_enter_handler(m, ocid, omid):
     ok, msg = use_promo(m.from_user.id, m.text.upper())
     bot.send_message(m.chat.id, msg)
     bot.edit_message_reply_markup(ocid, omid, reply_markup=promo_menu_kb())
 
+def report_text_handler(m, report_type, ocid, omid):
+    report_type_clean = report_type.replace("report_", "")
+    types = {"player": "на игрока", "bug": "баг", "finance": "финансы", "other": "другое"}
+    add_report(m.from_user.id, types.get(report_type_clean, "другое"), m.text)
+    bot.send_message(m.chat.id, "✅ Жалоба отправлена! Администрация рассмотрит её в ближайшее время.")
+    bot.edit_message_reply_markup(ocid, omid, reply_markup=help_menu_kb())
+
 def create_promo_handler(m, ocid, omid):
     if m.from_user.id != ADMIN_ID: return
     try:
         p = m.text.split()
-        cd = p[0].upper(); rt = p[1].lower(); ra = int(p[2]); mu = int(p[3]); d = int(p[4]) if len(p)>4 else None
+        cd = p[0].upper()
+        rt = p[1].lower()
+        ra = p[2]
+        mu = int(p[3])
+        d = int(p[4]) if len(p) > 4 else None
         create_promo(cd, rt, ra, mu, d)
         bot.send_message(m.chat.id, f"✅ {cd} создан!")
         log_admin(ADMIN_ID, "create_promo", cd, f"{rt} x{ra}")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_promocodes_kb())
 
 def delete_promo_handler(m, ocid, omid):
@@ -1298,6 +2206,91 @@ def delete_promo_handler(m, ocid, omid):
     bot.send_message(m.chat.id, f"✅ {m.text.upper()} удалён!")
     log_admin(ADMIN_ID, "delete_promo", m.text.upper(), "")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_promocodes_kb())
+
+def promo_chat_handler(m, ocid, omid):
+    if m.from_user.id != ADMIN_ID: return
+    try:
+        p = m.text.split()
+        chat_id = int(p[0])
+        cd = p[1].upper()
+        rt = p[2].lower()
+        ra = p[3]
+        mu = int(p[4])
+        d = int(p[5]) if len(p) > 5 else None
+        create_promo(cd, rt, ra, mu, d, chat_id=chat_id)
+        bot.send_message(m.chat.id, f"✅ {cd} создан для чата {chat_id}!")
+        log_admin(ADMIN_ID, "create_promo_chat", cd, f"chat:{chat_id} {rt} x{ra}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
+    bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_promocodes_kb())
+
+def promo_user_handler(m, ocid, omid):
+    if m.from_user.id != ADMIN_ID: return
+    try:
+        p = m.text.split()
+        user_id = int(p[0])
+        cd = p[1].upper()
+        rt = p[2].lower()
+        ra = p[3]
+        create_promo(cd, rt, ra, 1, None, user_id=user_id)
+        bot.send_message(m.chat.id, f"✅ {cd} создан для игрока {user_id}!")
+        log_admin(ADMIN_ID, "create_promo_user", cd, f"user:{user_id} {rt} x{ra}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
+    bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_promocodes_kb())
+
+def promo_random_handler(m, ocid, omid):
+    if m.from_user.id != ADMIN_ID: return
+    try:
+        p = m.text.split()
+        cd = p[0].upper()
+        mu = int(p[1])
+        d = int(p[2]) if len(p) > 2 else None
+        create_promo(cd, "random", "1", mu, d, is_random=1)
+        bot.send_message(m.chat.id, f"✅ {cd} создан (рандомный)!")
+        log_admin(ADMIN_ID, "create_promo_random", cd, f"limit:{mu}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
+    bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_promocodes_kb())
+
+def give_item_handler(m, ocid, omid):
+    if m.from_user.id != ADMIN_ID: return
+    try:
+        p = m.text.split()
+        user_id = int(p[0])
+        item_type = p[1].lower()
+        amount = int(p[2])
+        
+        u = get_user(user_id)
+        if item_type == "gc":
+            update_user(user_id, gc=u["gc"]+amount)
+        elif item_type == "shield":
+            update_user(user_id, shields=u["shields"]+amount)
+        elif item_type == "diamond":
+            update_user(user_id, diamond_shield=u["diamond_shield"]+amount)
+        elif item_type == "double":
+            update_user(user_id, double_chance=u["double_chance"]+amount)
+        elif item_type == "insurance":
+            update_user(user_id, insurance=u["insurance"]+amount)
+        elif item_type == "blood_mark":
+            update_user(user_id, blood_mark=u.get("blood_mark", 0)+amount)
+        elif item_type == "reincarnation":
+            update_user(user_id, reincarnation=u.get("reincarnation", 0)+amount)
+        elif item_type == "silencer":
+            update_user(user_id, silencer=u.get("silencer", 0)+amount)
+        elif item_type == "fake_bullet":
+            update_user(user_id, fake_bullet=u.get("fake_bullet", 0)+amount)
+        elif item_type == "vip":
+            update_user(user_id, vip_level=amount, vip_until=(datetime.now()+timedelta(days=amount)).isoformat())
+        else:
+            bot.send_message(m.chat.id, f"❌ Неизвестный тип: {item_type}")
+            return
+        
+        bot.send_message(m.chat.id, f"✅ {amount} x {item_type} выдано {get_name(user_id)}")
+        log_admin(ADMIN_ID, "give_item", str(user_id), f"{amount} x {item_type}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
+    bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_panel_kb())
 
 def broadcast_handler(m, ocid, omid):
     if m.from_user.id != ADMIN_ID: return
@@ -1309,8 +2302,11 @@ def broadcast_handler(m, ocid, omid):
     conn.close()
     ok, fail = 0, 0
     for (cid,) in ch:
-        try: bot.send_message(cid, f"📢 РАССЫЛКА\n\n{text}"); ok += 1
-        except: fail += 1
+        try:
+            bot.send_message(cid, f"📢 РАССЫЛКА\n\n{text}")
+            ok += 1
+        except:
+            fail += 1
     bot.send_message(ADMIN_ID, f"✅ {ok} успешно, {fail} ошибок")
     log_admin(ADMIN_ID, "broadcast", f"success:{ok}", text[:50])
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_panel_kb())
@@ -1322,7 +2318,8 @@ def add_gc_handler(m, ocid, omid):
         add_gc(uid, amt)
         bot.send_message(m.chat.id, f"✅ {amt} GC выдано {get_name(uid)}")
         log_admin(ADMIN_ID, "add_gc", str(uid), f"{amt} gc")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_panel_kb())
 
 def remove_gc_handler(m, ocid, omid):
@@ -1332,7 +2329,8 @@ def remove_gc_handler(m, ocid, omid):
         ng = remove_gc(uid, amt)
         bot.send_message(m.chat.id, f"✅ {amt} GC списано. Новый баланс: {ng}")
         log_admin(ADMIN_ID, "remove_gc", str(uid), f"{amt} gc")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_panel_kb())
 
 def set_max_players_handler(m, tcid, ocid, omid):
@@ -1341,9 +2339,12 @@ def set_max_players_handler(m, tcid, ocid, omid):
         if 2 <= v <= MAX_PLAYERS_LIMIT:
             update_chat_settings(tcid, max_players=v)
             bot.send_message(m.chat.id, f"✅ Макс игроков: {v}")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, f"❌ От 2 до {MAX_PLAYERS_LIMIT}")
-    except: bot.send_message(m.chat.id, "❌ Введите число!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, f"❌ От 2 до {MAX_PLAYERS_LIMIT}")
+    except:
+        bot.send_message(m.chat.id, "❌ Введите число!")
 
 def set_min_bet_handler(m, tcid, ocid, omid):
     try:
@@ -1351,9 +2352,12 @@ def set_min_bet_handler(m, tcid, ocid, omid):
         if 1 <= v <= 1000:
             update_chat_settings(tcid, min_bet=v)
             bot.send_message(m.chat.id, f"✅ Мин ставка: {v}")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, "❌ От 1 до 1000")
-    except: bot.send_message(m.chat.id, "❌ Введите число!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, "❌ От 1 до 1000")
+    except:
+        bot.send_message(m.chat.id, "❌ Введите число!")
 
 def set_max_bet_handler(m, tcid, ocid, omid):
     try:
@@ -1361,9 +2365,12 @@ def set_max_bet_handler(m, tcid, ocid, omid):
         if 10 <= v <= 10000:
             update_chat_settings(tcid, max_bet=v)
             bot.send_message(m.chat.id, f"✅ Макс ставка: {v}")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, "❌ От 10 до 10000")
-    except: bot.send_message(m.chat.id, "❌ Введите число!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, "❌ От 10 до 10000")
+    except:
+        bot.send_message(m.chat.id, "❌ Введите число!")
 
 def set_bet_buttons_handler(m, tcid, ocid, omid):
     try:
@@ -1372,9 +2379,12 @@ def set_bet_buttons_handler(m, tcid, ocid, omid):
         if all(1 <= b <= 10000 for b in bts) and len(bts) <= 10:
             update_chat_settings(tcid, bet_buttons=bt)
             bot.send_message(m.chat.id, f"✅ Кнопки: {bt}")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, "❌ Пример: 10,50,100,200,500,1000")
-    except: bot.send_message(m.chat.id, "❌ Ошибка!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, "❌ Пример: 10,50,100,200,500,1000")
+    except:
+        bot.send_message(m.chat.id, "❌ Ошибка!")
 
 def set_winner_bonus_handler(m, tcid, ocid, omid):
     try:
@@ -1382,9 +2392,12 @@ def set_winner_bonus_handler(m, tcid, ocid, omid):
         if 0 <= v <= 500:
             update_chat_settings(tcid, winner_bonus=v)
             bot.send_message(m.chat.id, f"✅ Бонус: {v} GC")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, "❌ От 0 до 500")
-    except: bot.send_message(m.chat.id, "❌ Введите число!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, "❌ От 0 до 500")
+    except:
+        bot.send_message(m.chat.id, "❌ Введите число!")
 
 def set_auto_kick_handler(m, tcid, ocid, omid):
     try:
@@ -1392,15 +2405,19 @@ def set_auto_kick_handler(m, tcid, ocid, omid):
         if 0 <= v <= 10:
             update_chat_settings(tcid, auto_kick_minutes=v)
             bot.send_message(m.chat.id, f"✅ Авто-кик: {v} мин")
-            kb, info = chat_settings_kb(tcid); bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
-        else: bot.send_message(m.chat.id, "❌ От 0 до 10")
-    except: bot.send_message(m.chat.id, "❌ Введите число!")
+            kb, info = chat_settings_kb(tcid)
+            bot.edit_message_text(info, ocid, omid, reply_markup=kb, parse_mode="HTML")
+        else:
+            bot.send_message(m.chat.id, "❌ От 0 до 10")
+    except:
+        bot.send_message(m.chat.id, "❌ Введите число!")
 
 def edit_ranks_handler(m, ocid, omid):
     if m.from_user.id != ADMIN_ID: return
     try:
         for p in m.text.split(','):
-            n, r = p.split(':'); r = int(r)
+            n, r = p.split(':')
+            r = int(r)
             conn = sqlite3.connect("roulette.db")
             c = conn.cursor()
             if n == "Стрелок":
@@ -1417,21 +2434,24 @@ def edit_ranks_handler(m, ocid, omid):
             conn.commit()
             conn.close()
         bot.send_message(m.chat.id, "✅ Пороги обновлены!")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_ranks_kb())
 
 def edit_rank_rewards_handler(m, ocid, omid):
     if m.from_user.id != ADMIN_ID: return
     try:
         for p in m.text.split(','):
-            n, r = p.split(':'); r = int(r)
+            n, r = p.split(':')
+            r = int(r)
             conn = sqlite3.connect("roulette.db")
             c = conn.cursor()
             c.execute(f"UPDATE rank_settings SET reward_gc=? WHERE rank_name=?", (r, n))
             conn.commit()
             conn.close()
         bot.send_message(m.chat.id, "✅ Награды обновлены!")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_ranks_kb())
 
 def edit_rank_coeff_handler(m, ocid, omid):
@@ -1440,15 +2460,18 @@ def edit_rank_coeff_handler(m, ocid, omid):
         wp, lp = 0, 0
         for p in m.text.split(','):
             n, v = p.split(':')
-            if n == "Победа": wp = int(v)
-            elif n == "Поражение": lp = int(v)
+            if n == "Победа":
+                wp = int(v)
+            elif n == "Поражение":
+                lp = int(v)
         conn = sqlite3.connect("roulette.db")
         c = conn.cursor()
         c.execute("UPDATE rank_settings SET win_points=?, loss_points=?", (wp, lp))
         conn.commit()
         conn.close()
         bot.send_message(m.chat.id, f"✅ Коэффициенты: победа +{wp}, поражение -{lp}")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_ranks_kb())
 
 def reset_chat_rating_handler(m, ocid, omid):
@@ -1463,7 +2486,8 @@ def reset_chat_rating_handler(m, ocid, omid):
         conn.commit()
         conn.close()
         bot.send_message(m.chat.id, f"✅ Рейтинг чата сброшен!")
-    except Exception as e: bot.send_message(m.chat.id, f"❌ {e}")
+    except Exception as e:
+        bot.send_message(m.chat.id, f"❌ {e}")
     bot.edit_message_reply_markup(ocid, omid, reply_markup=admin_chat_rating_kb())
 
 if __name__ == "__main__":
@@ -1472,4 +2496,22 @@ if __name__ == "__main__":
     print(f"📱 @{BOT_USERNAME}")
     print(f"👑 Admin ID: {ADMIN_ID}")
     print("⚠️ Для работы банов в хардкор режиме бот должен быть администратором чата!")
+    
+    # Запускаем планировщик для Чёрного рынка (раз в 24 часа)
+    def schedule_black_market():
+        while True:
+            now = datetime.now()
+            # Запуск в 21:00 каждый день
+            next_run = now.replace(hour=21, minute=0, second=0, microsecond=0)
+            if now >= next_run:
+                next_run += timedelta(days=1)
+            wait_seconds = (next_run - now).total_seconds()
+            time.sleep(wait_seconds)
+            start_black_market()
+            time.sleep(15 * 60)  # 15 минут рынок открыт
+            end_black_market()
+    
+    thread = threading.Thread(target=schedule_black_market, daemon=True)
+    thread.start()
+    
     bot.infinity_polling()
